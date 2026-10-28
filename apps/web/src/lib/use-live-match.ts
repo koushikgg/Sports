@@ -68,41 +68,50 @@ export function useLiveMatch(initial: MatchSnapshot, socketFactory?: () => Promi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, apply]);
 
-  return { snapshot, connected, socket, apply };
+  return { snapshot, connected, socket, apply, seqRef: seq };
 }
 
-/** Live match for scorers: same sync plus a `send` that carries the expected seq. */
+/**
+ * Live match for scorers: same sync plus a `send` that carries the expected seq.
+ *
+ * Sends are queued and go out one at a time, in the order they were tapped. Dropping a tap
+ * while a ball is saving would silently lose a delivery, which is worse than a duplicate the
+ * scorer can see and undo.
+ */
 export function useScorer(initial: MatchSnapshot) {
   const live = useLiveMatch(initial, getScorerSocket);
-  const { socket, snapshot, apply } = live;
+  const { socket, apply, seqRef } = live;
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const busyRef = useRef(false);
-  const seqRef = useRef(snapshot.seq);
-  seqRef.current = snapshot.seq;
+  const [pending, setPending] = useState(0);
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
 
   const send = useCallback(
-    (type: string, payload: Record<string, unknown> = {}) =>
-      new Promise<boolean>((resolve) => {
-        if (!socket || busyRef.current) return resolve(false);
-        busyRef.current = true;
-        setBusy(true);
-        setError(null);
-        socket.emit(
-          ClientEvents.scoreEvent,
-          { matchId: initial.matchId, type, payload, expectedSeq: seqRef.current },
-          (res: Ack<{ seq: number }>) => {
-            busyRef.current = false;
-            setBusy(false);
-            if (!res.ok) {
-              setError(res.message);
-              if (res.snapshot) apply(res.snapshot); // out of date: adopt the server's view
-            }
-            resolve(res.ok);
-          },
-        );
-      }),
-    [socket, initial.matchId, apply],
+    (type: string, payload: Record<string, unknown> = {}) => {
+      if (!socket) return Promise.resolve(false);
+      setPending((n) => n + 1);
+
+      const emit = () =>
+        new Promise<boolean>((resolve) => {
+          setError(null);
+          // The server emits the update before the ack, so seqRef is already current here.
+          socket.emit(
+            ClientEvents.scoreEvent,
+            { matchId: initial.matchId, type, payload, expectedSeq: seqRef.current },
+            (res: Ack<{ seq: number }>) => {
+              if (!res.ok) {
+                setError(res.message);
+                if (res.snapshot) apply(res.snapshot); // out of date: adopt the server's view
+              }
+              resolve(res.ok);
+            },
+          );
+        });
+
+      const next = chain.current.then(emit, emit);
+      chain.current = next;
+      return next.finally(() => setPending((n) => n - 1));
+    },
+    [socket, initial.matchId, apply, seqRef],
   );
 
   const release = useCallback(
@@ -110,5 +119,5 @@ export function useScorer(initial: MatchSnapshot) {
     [socket, initial.matchId],
   );
 
-  return { ...live, send, release, error, busy };
+  return { ...live, send, release, error, busy: pending > 0 };
 }

@@ -4,7 +4,6 @@ import {
   asc,
   eq,
   getDb,
-  getTxDb,
   inArray,
   matchEvents,
   matches,
@@ -14,12 +13,14 @@ import {
   sports,
   teamMembers,
   teams,
+  tournaments,
   type Reader,
 } from '@sports/db';
 import type { Ack, MatchSnapshot, MatchUpdate, Role, ScoreEventInput, ScoreSummary, SportKey } from '@sports/shared';
 import { formatOvers, type CricketState } from '@sports/sports-engine/src/cricket';
 import {
   decide,
+  decideOnState,
   getEngine,
   replay,
   type LoggedEvent,
@@ -31,17 +32,23 @@ type MatchRow = typeof matches.$inferSelect;
 
 const CLOSED = ['completed', 'abandoned'];
 
-async function loadContext(db: Reader, match: MatchRow): Promise<{ engine: SportEngine; ctx: MatchContext; sportKey: SportKey }> {
-  const [sport] = await db.select().from(sports).where(eq(sports.id, match.sportId)).limit(1);
+type Loaded = { engine: SportEngine; ctx: MatchContext; sportKey: SportKey };
+
+async function loadContext(db: Reader, match: MatchRow): Promise<Loaded> {
+  // Three independent reads: run them together so it costs one round trip, not three.
+  const [sportRows, teamRows, memberRows] = await Promise.all([
+    db.select().from(sports).where(eq(sports.id, match.sportId)).limit(1),
+    db.select().from(teams).where(inArray(teams.id, [match.teamAId, match.teamBId])),
+    db
+      .select({ teamId: teamMembers.teamId, id: players.id, name: players.name })
+      .from(teamMembers)
+      .innerJoin(players, eq(players.id, teamMembers.playerId))
+      .where(inArray(teamMembers.teamId, [match.teamAId, match.teamBId]))
+      .orderBy(asc(players.name)),
+  ]);
+  const sport = sportRows[0];
   if (!sport) throw new Error('Sport missing');
-  const teamRows = await db.select().from(teams).where(inArray(teams.id, [match.teamAId, match.teamBId]));
   const byId = new Map(teamRows.map((t) => [t.id, t.name]));
-  const memberRows = await db
-    .select({ teamId: teamMembers.teamId, id: players.id, name: players.name })
-    .from(teamMembers)
-    .innerJoin(players, eq(players.id, teamMembers.playerId))
-    .where(inArray(teamMembers.teamId, [match.teamAId, match.teamBId]))
-    .orderBy(asc(players.name));
   const squads: Record<string, { id: string; name: string }[]> = {
     [match.teamAId]: [],
     [match.teamBId]: [],
@@ -56,6 +63,22 @@ async function loadContext(db: Reader, match: MatchRow): Promise<{ engine: Sport
   };
   const key = sport.key as SportKey;
   return { engine: getEngine(key), ctx, sportKey: key };
+}
+
+/**
+ * Teams and squads barely change during a match, but every ball needs them. Cache briefly so
+ * scoring does not pay three queries per ball. A roster edit shows up within the TTL.
+ */
+const CONTEXT_TTL_MS = 15_000;
+const contextCache = new Map<string, { at: number; value: Loaded }>();
+
+async function getContext(db: Reader, match: MatchRow): Promise<Loaded> {
+  const hit = contextCache.get(match.id);
+  if (hit && Date.now() - hit.at < CONTEXT_TTL_MS) return hit.value;
+  const value = await loadContext(db, match);
+  contextCache.set(match.id, { at: Date.now(), value });
+  if (contextCache.size > 200) contextCache.delete(contextCache.keys().next().value!);
+  return value;
 }
 
 async function loadHistory(db: Reader, matchId: string): Promise<LoggedEvent[]> {
@@ -78,19 +101,33 @@ function snapshotOf(match: MatchRow, engine: SportEngine, ctx: MatchContext, sta
   };
 }
 
+/** Match row plus its cached state in a single round trip. */
+async function loadMatchWithState(db: Reader, matchId: string) {
+  const [row] = await db
+    .select({ match: matches, state: matchStates.state, stateSeq: matchStates.seq })
+    .from(matches)
+    .leftJoin(matchStates, eq(matchStates.matchId, matches.id))
+    .where(eq(matches.id, matchId))
+    .limit(1);
+  if (!row) return null;
+  // The cached state is only trustworthy when it matches the match's last event.
+  const fresh = row.state != null && row.stateSeq === row.match.lastSeq;
+  return { match: row.match, cachedState: fresh ? row.state : undefined };
+}
+
 /** Current state of a match. Uses the cached state row, falling back to a replay. */
 export async function getSnapshot(matchId: string): Promise<MatchSnapshot | null> {
   const db = getDb();
-  const [match] = await db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
-  if (!match) return null;
-  const { engine, ctx } = await loadContext(db, match);
-
-  const [cached] = await db.select().from(matchStates).where(eq(matchStates.matchId, matchId)).limit(1);
+  const row = await loadMatchWithState(db, matchId);
+  if (!row) return null;
+  const { engine, ctx } = await getContext(db, row.match);
   const state =
-    cached && cached.seq === match.lastSeq
-      ? cached.state
-      : replay(engine, ctx, await loadHistory(db, matchId));
-  return snapshotOf(match, engine, ctx, state);
+    row.cachedState !== undefined
+      ? row.cachedState
+      : row.match.lastSeq === 0
+        ? engine.initialState(ctx)
+        : replay(engine, ctx, await loadHistory(db, matchId));
+  return snapshotOf(row.match, engine, ctx, state);
 }
 
 export interface Actor {
@@ -101,81 +138,88 @@ export interface Actor {
 export type SubmitResult = { ok: true; update: MatchUpdate; statusChanged: boolean } | Extract<Ack, { ok: false }>;
 
 /**
- * The single write path for scoring. One transaction: lock the match row, check the
- * caller's view is current (`expectedSeq`), let the engine decide, append the event.
+ * The single write path for scoring: one read, one atomic write.
+ *
+ * The write is a single SQL statement that bumps `last_seq` only if it still equals what we
+ * read (`expectedSeq`), and appends the event and saves the state in the same statement. Two
+ * scorers racing on the same ball cannot both win: the loser updates zero rows and gets a
+ * conflict. No interactive transaction is needed, so each ball costs two round trips.
  */
 export async function submitScoreEvent(actor: Actor, input: ScoreEventInput): Promise<SubmitResult> {
   if (actor.role !== 'admin' && actor.role !== 'scorer') {
     return { ok: false, code: 'forbidden', message: 'Not allowed to score' };
   }
 
-  return getTxDb().transaction(async (tx): Promise<SubmitResult> => {
-    const [match] = await tx
-      .select()
-      .from(matches)
-      .where(eq(matches.id, input.matchId))
-      .for('update')
-      .limit(1);
-    if (!match) return { ok: false, code: 'not_found', message: 'Match not found' };
-    if (CLOSED.includes(match.status) && input.type !== 'undo') {
-      return { ok: false, code: 'closed', message: `Match is ${match.status}` };
-    }
-    if (match.scorerId && match.scorerId !== actor.sub && actor.role !== 'admin') {
-      return { ok: false, code: 'locked', message: 'Another scorer is scoring this match' };
-    }
+  const db = getDb();
+  const row = await loadMatchWithState(db, input.matchId);
+  if (!row) return { ok: false, code: 'not_found', message: 'Match not found' };
+  const { match } = row;
 
-    const { engine, ctx } = await loadContext(tx, match);
-    const history = await loadHistory(tx, match.id);
+  if (CLOSED.includes(match.status) && input.type !== 'undo') {
+    return { ok: false, code: 'closed', message: `Match is ${match.status}` };
+  }
+  if (match.scorerId && match.scorerId !== actor.sub && actor.role !== 'admin') {
+    return { ok: false, code: 'locked', message: 'Another scorer is scoring this match' };
+  }
 
-    if (input.expectedSeq !== match.lastSeq) {
-      const state = replay(engine, ctx, history);
-      return {
-        ok: false,
-        code: 'conflict',
-        message: 'Your view is out of date',
-        snapshot: snapshotOf(match, engine, ctx, state),
-      };
-    }
+  const { engine, ctx } = await getContext(db, match);
+  // A replay is only needed for undo, or when there is no usable cached state yet.
+  const history = (): Promise<LoggedEvent[]> =>
+    match.lastSeq === 0 ? Promise.resolve([]) : loadHistory(db, match.id);
 
-    const decision = decide(engine, ctx, history, { type: input.type, payload: input.payload });
-    if (!decision.ok) return { ok: false, code: 'invalid', message: decision.error };
+  const conflict = async (): Promise<SubmitResult> => {
+    const fresh = await loadMatchWithState(db, match.id);
+    const current = fresh?.match ?? match;
+    const state = fresh?.cachedState !== undefined ? fresh.cachedState : replay(engine, ctx, await history());
+    return { ok: false, code: 'conflict', message: 'Your view is out of date', snapshot: snapshotOf(current, engine, ctx, state) };
+  };
 
-    const { state, event } = decision.value;
-    const seq = match.lastSeq + 1;
-    const outcome = engine.outcome?.(state);
+  if (input.expectedSeq !== match.lastSeq) return conflict();
 
-    let status = match.status;
-    if (outcome?.complete) status = 'completed';
-    else if (status === 'scheduled' || status === 'paused' || status === 'completed') status = 'live';
+  const event = { type: input.type, payload: input.payload };
+  const decision =
+    event.type !== 'undo' && row.cachedState !== undefined
+      ? decideOnState(engine, row.cachedState, event)
+      : decide(engine, ctx, await history(), event);
+  if (!decision.ok) return { ok: false, code: 'invalid', message: decision.error };
 
-    await tx.insert(matchEvents).values({
-      matchId: match.id,
-      seq,
-      type: event.type,
-      payload: event.payload,
-      createdBy: actor.sub,
-    });
-    await tx
-      .insert(matchStates)
-      .values({ matchId: match.id, seq, state })
-      .onConflictDoUpdate({ target: matchStates.matchId, set: { seq, state, updatedAt: new Date() } });
-    await tx
-      .update(matches)
-      .set({
-        lastSeq: seq,
-        status,
-        scorerId: match.scorerId ?? actor.sub,
-        result: outcome?.complete ? (outcome.result ?? {}) : null,
-      })
-      .where(eq(matches.id, match.id));
+  const { state, event: recorded } = decision.value;
+  const seq = match.lastSeq + 1;
+  const outcome = engine.outcome?.(state);
 
-    const updated: MatchRow = { ...match, status, lastSeq: seq };
-    return {
-      ok: true,
-      statusChanged: status !== match.status,
-      update: { ...snapshotOf(updated, engine, ctx, state, seq), event },
-    };
-  });
+  let status = match.status;
+  if (outcome?.complete) status = 'completed';
+  else if (status === 'scheduled' || status === 'paused' || status === 'completed') status = 'live';
+
+  const result = outcome?.complete ? JSON.stringify(outcome.result ?? {}) : null;
+  const written = await db.execute(sql`
+    WITH upd AS (
+      UPDATE matches
+         SET last_seq = ${seq}::int,
+             status = ${status}::match_status,
+             scorer_id = COALESCE(scorer_id, ${actor.sub}::uuid),
+             result = ${result}::jsonb
+       WHERE id = ${match.id}::uuid AND last_seq = ${match.lastSeq}::int
+       RETURNING id
+    ), ev AS (
+      INSERT INTO match_events (match_id, seq, type, payload, created_by)
+      SELECT id, ${seq}::int, ${recorded.type}::text, ${JSON.stringify(recorded.payload)}::jsonb, ${actor.sub}::uuid FROM upd
+    ), st AS (
+      INSERT INTO match_states (match_id, seq, state, updated_at)
+      SELECT id, ${seq}::int, ${JSON.stringify(state)}::jsonb, now() FROM upd
+      ON CONFLICT (match_id) DO UPDATE
+        SET seq = EXCLUDED.seq, state = EXCLUDED.state, updated_at = EXCLUDED.updated_at
+    )
+    SELECT count(*)::int AS n FROM upd
+  `);
+  if (Number((written.rows[0] as { n?: number } | undefined)?.n ?? 0) !== 1) return conflict();
+
+  const updated: MatchRow = { ...match, status, lastSeq: seq };
+  return {
+    ok: true,
+    statusChanged: status !== match.status,
+    update: { ...snapshotOf(updated, engine, ctx, state, seq), event: recorded },
+  };
 }
 
 /** Free the scorer lock so another scorer can take over. */
@@ -202,6 +246,12 @@ export interface MatchCardData {
   seq: number;
   teamA: string;
   teamB: string;
+  teamAShort: string | null;
+  teamBShort: string | null;
+  /** Tournament name, if the match belongs to one. */
+  competition: string | null;
+  /** Who won a finished match; null for a tie, no result or an unfinished match. */
+  winner: 'a' | 'b' | null;
   summary: ScoreSummary;
 }
 
@@ -232,6 +282,9 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
       sportName: sports.name,
       teamA: a.name,
       teamB: b.name,
+      teamAShort: a.shortName,
+      teamBShort: b.shortName,
+      competition: tournaments.name,
       state: matchStates.state,
       stateSeq: matchStates.seq,
     })
@@ -239,6 +292,7 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
     .innerJoin(sports, eq(sports.id, matches.sportId))
     .innerJoin(a, eq(a.id, matches.teamAId))
     .innerJoin(b, eq(b.id, matches.teamBId))
+    .leftJoin(tournaments, eq(tournaments.id, matches.tournamentId))
     .leftJoin(matchStates, eq(matchStates.matchId, matches.id))
     .where(and(...filters))
     .orderBy(
@@ -271,6 +325,13 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
       seq: r.match.lastSeq,
       teamA: r.teamA,
       teamB: r.teamB,
+      teamAShort: r.teamAShort,
+      teamBShort: r.teamBShort,
+      competition: r.competition,
+      winner:
+        r.match.result?.winnerTeamId === r.match.teamAId ? 'a'
+        : r.match.result?.winnerTeamId === r.match.teamBId ? 'b'
+        : null,
       summary: engine.summary(state, ctx),
     };
   });
@@ -327,7 +388,7 @@ export async function getCricketLeaders(limit = 5): Promise<{ runs: Leader[]; wi
   const names = new Map(nameRows.map((p) => [p.id, p.name]));
 
   return {
-    runs: topBat.map(([id, v]) => ({ playerId: id, name: names.get(id) ?? '?', value: v.runs, detail: `${v.balls} balls` })),
+    runs: topBat.map(([id, v]) => ({ playerId: id, name: names.get(id) ?? '?', value: v.runs, detail: `${v.balls} ball${v.balls === 1 ? '' : 's'}` })),
     wickets: topBowl.map(([id, v]) => ({
       playerId: id,
       name: names.get(id) ?? '?',

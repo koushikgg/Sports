@@ -62,6 +62,17 @@ export function replay<S>(engine: SportEngine<S>, ctx: MatchContext, history: Lo
 export type Decision<S> = Result<{ state: S; event: SportEvent }>;
 
 /**
+ * Decide a normal (non-undo) event on top of an already-computed state. This is the fast path:
+ * callers that hold the cached state skip replaying the whole log.
+ */
+export function decideOnState<S>(engine: SportEngine<S>, state: S, input: SportEvent): Decision<S> {
+  if (engine.outcome?.(state).complete) return { ok: false, error: 'Match is already complete' };
+  const check = engine.validate(state, input);
+  if (!check.ok) return check;
+  return { ok: true, value: { state: engine.apply(state, input), event: input } };
+}
+
+/**
  * Decide what happens when `input` arrives on top of `history`.
  * `undo` cancels the most recent active event; anything else is validated by the engine.
  */
@@ -83,8 +94,5 @@ export function decide<S>(
   }
 
   const current = active.reduce((s, e) => engine.apply(s, e), engine.initialState(ctx));
-  if (engine.outcome?.(current).complete) return { ok: false, error: 'Match is already complete' };
-  const check = engine.validate(current, input);
-  if (!check.ok) return check;
-  return { ok: true, value: { state: engine.apply(current, input), event: input } };
+  return decideOnState(engine, current, input);
 }

@@ -1,0 +1,69 @@
+/* Ratch design system tokens (dark), shared by the scorer console and the matches dashboard.
+   Scoped to .ratch so the rest of the app keeps its own theme. Source of truth: Claude Design. */
+
+.ratch {
+  --surface-canvas: #0d0e11;
+  --surface-card: #17181c;
+  --surface-sunken: #101114;
+  --surface-muted: #1f2126;
+  --text-primary: #f4f5f7;
+  --text-secondary: #9aa1ad;
+  --text-tertiary: #6a7282;
+  --amber: #ffdb4d;
+  --amber-soft: color-mix(in srgb, #ffdb4d 16%, transparent);
+  --amber-faint: color-mix(in srgb, #ffdb4d 9%, transparent);
+  --blue: #006cff;
+  --blue-soft: color-mix(in srgb, #006cff 22%, #1f2126);
+  --red: #ff383c;
+  --red-text: #ff7477;
+  --green: #34c759;
+  --green-soft: color-mix(in srgb, #34c759 20%, #1f2126);
+  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Tight', 'Inter Variable', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+.ratch button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
+.ratch button:disabled { cursor: not-allowed; }
+.ratch :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* mono "system voice" labels */
+.ratch .lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.ratch .lbl-sm { font-size: 9px; }
+.ratch .mono { font-family: var(--font-mono); }
+
+/* ---------- chips ---------- */
+.sc-chip { min-width: 42px; height: 42px; padding: 0 10px; box-sizing: border-box; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.sc-chip[data-size='sm'] { min-width: 24px; height: 24px; padding: 0 6px; font-size: 10px; opacity: 0.8; }
+.sc-chip[data-size='md'] { min-width: 34px; height: 34px; padding: 0 8px; font-size: 12px; }
+.sc-chip[data-size='lg'] { min-width: 64px; height: 64px; padding: 0 14px; font-size: 24px; }
+.sc-chip[data-kind='dot'] { background: var(--surface-muted); color: var(--text-tertiary); }
+.sc-chip[data-kind='run'] { background: var(--surface-muted); color: var(--text-primary); }
+.sc-chip[data-kind='four'] { background: var(--blue); color: #fff; }
+.sc-chip[data-kind='six'] { background: var(--green); color: #0d0e11; }
+.sc-chip[data-kind='wicket'] { background: var(--red); color: #fff; }
+.sc-chip[data-kind='extra'] { background: var(--amber-soft); color: var(--amber); }
+.sc-chip[data-kind='empty'] { background: var(--surface-sunken); color: var(--text-tertiary); }
+.sc-chip[data-pop='true'] { animation: sc-pop 240ms var(--ease-out); }
+
+/* ---------- animation ---------- */
+@keyframes sc-bump { 0% { transform: scale(1); } 40% { transform: scale(1.05); } 100% { transform: scale(1); } }
+@keyframes sc-pop { 0% { transform: scale(0.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes sc-slide { 0% { transform: translateY(-8px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes sc-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) {
+  .ratch *, .ratch *::before, .ratch *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+

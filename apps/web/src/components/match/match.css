@@ -1,0 +1,80 @@
+/* Match page (Ratch design system). Tokens/chips: styles/ratch-base.css; badge/buttons: matches.css. */
+
+.mp-title { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.mp-title h1 { margin: 6px 0 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4.2vw, 40px); line-height: 1.08; letter-spacing: -0.03em; }
+.mp-title h1 span { color: var(--text-tertiary); font-weight: 500; }
+.mp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.mp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; align-items: start; }
+.mp-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mp-card { display: flex; flex-direction: column; gap: 14px; padding: 18px 22px; border-radius: 20px; background: var(--surface-card); }
+.mp-row { display: flex; justify-content: space-between; gap: 12px; }
+.mp-muted { font-size: 13px; color: var(--text-tertiary); }
+
+/* ---- score card ---- */
+.mp-hero { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 18px; padding: 24px; border-radius: 24px; background: radial-gradient(70% 120% at 100% 0%, color-mix(in srgb, #ffdb4d 12%, transparent), transparent 60%), var(--surface-card); }
+.mp-hero-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mp-live { display: flex; align-items: center; gap: 12px; }
+.mp-conn { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.mp-conn[data-on='true'] { color: var(--green); }
+.mp-side { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.mp-team { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 16px; font-weight: 600; }
+.mp-side[data-big='true'] .mp-team { font-family: var(--font-display); font-size: clamp(20px, 2.6vw, 26px); letter-spacing: -0.02em; }
+.mp-other { font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.mp-other small { font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.mp-batscore { text-align: right; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.mp-runs { font-family: var(--font-display); font-weight: 600; font-size: clamp(44px, 7vw, 60px); line-height: 1; letter-spacing: -0.03em; transform-origin: right bottom; font-variant-numeric: tabular-nums; }
+.mp-runs[data-bump='true'] { animation: sc-bump 260ms var(--ease-out); }
+.mp-bigscore { font-family: var(--font-display); font-weight: 600; font-size: 40px; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.mp-status { padding: 12px 14px; border-radius: 12px; background: var(--surface-sunken); font-size: 14px; font-weight: 500; color: var(--amber); }
+
+.mp-flash { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transform: translateY(8px) scale(0.92); transition: opacity 350ms var(--ease-out), transform 500ms var(--ease-out); }
+.mp-flash[data-show='true'] { opacity: 1; transform: none; }
+.mp-flash span { padding: 14px 32px; border-radius: 999px; font-family: var(--font-display); font-weight: 700; font-size: 36px; color: #fff; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5); background: var(--blue); }
+.mp-flash[data-kind='six'] span { background: var(--green); color: #0d0e11; }
+.mp-flash[data-kind='wicket'] span { background: var(--red); }
+
+/* ---- recent balls + chart ---- */
+.mp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.mp-bars { height: 150px; display: grid; gap: 4px; align-items: end; justify-items: center; }
+.mp-bar { width: min(100%, 34px); border-radius: 999px; background: var(--blue); min-height: 4px; transition: height 400ms var(--ease-out), background 300ms; }
+.mp-bar[data-state='future'] { background: var(--surface-muted); }
+.mp-bar[data-state='live'] { background: color-mix(in srgb, #006cff 55%, #fff); }
+.mp-bar[data-hot='true'] { background: var(--amber); }
+.mp-bar[data-wicket='true'] { background: var(--red); }
+.mp-axis { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); text-align: center; }
+.mp-legend { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); }
+.mp-legend i { width: 8px; height: 8px; border-radius: 3px; background: var(--blue); }
+.mp-legend i + i, .mp-legend i:nth-of-type(n + 2) { margin-left: 8px; }
+.mp-legend i[data-k='amber'] { background: var(--amber); }
+.mp-legend i[data-k='red'] { background: var(--red); }
+
+/* ---- crease + commentary ---- */
+.mp-crease { padding: 8px; gap: 2px; }
+.mp-person { display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: 'ava name fig fig' 'ava tag tag sr'; align-items: center; column-gap: 12px; padding: 10px 12px; border-radius: 14px; }
+.mp-person[data-striker='true'] { background: var(--amber-faint); }
+.mp-person .rx-ava { grid-area: ava; }
+.mp-pname { grid-area: name; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-tag { grid-area: tag; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--amber); }
+.mp-tag.lbl { color: var(--text-tertiary); font-weight: 600; }
+.mp-pfig { grid-area: fig; font-family: var(--font-mono); font-size: 16px; font-weight: 700; text-align: right; }
+.mp-pfig small { font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.mp-psr { grid-area: sr; text-align: right; }
+.mp-person[data-bowler='true'] { margin-top: 4px; border-top: 1px solid rgba(255, 255, 255, 0.05); border-radius: 0 0 14px 14px; padding-top: 14px; }
+.mp-partner { padding: 6px 14px 8px; }
+.mp-comm-head { padding-bottom: 6px; }
+.mp-comm { display: grid; grid-template-columns: 40px 34px 1fr; gap: 10px; padding: 8px 0; align-items: baseline; font-size: 14px; line-height: 1.45; }
+.mp-comm[data-new='true'] { animation: sc-slide 350ms var(--ease-out); }
+.mp-comm-ov { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.mp-comm-chip { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+
+/* ---- scorecard section ---- */
+.mp-scorecard { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.mp-section-head { display: flex; align-items: baseline; gap: 12px; }
+.mp-section-head h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 24px; letter-spacing: -0.02em; }
+.mp-scorecard .sc-cardwrap { padding: 8px 0 0; }
+
+@media (max-width: 720px) {
+  .mp-hero { padding: 18px; }
+  .mp-comm { grid-template-columns: 36px 28px 1fr; }
+}

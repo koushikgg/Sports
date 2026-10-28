@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decide, replay, activeEvents, type LoggedEvent, type MatchContext, type SportEngine } from './index';
+import { decide, decideOnState, replay, activeEvents, type LoggedEvent, type MatchContext, type SportEngine } from './index';
 
 type S = { a: number; b: number };
 
@@ -61,5 +61,21 @@ describe('decide', () => {
     const history = [goal(1, 'a'), goal(2, 'a'), goal(3, 'a')];
     expect(decide(engine, ctx, history, { type: 'goal', payload: { side: 'b' } }).ok).toBe(false);
     expect(decide(engine, ctx, history, { type: 'undo', payload: {} }).ok).toBe(true);
+  });
+});
+
+describe('decideOnState (fast path)', () => {
+  it('matches decide() when given the replayed state', () => {
+    const history = [goal(1, 'a'), goal(2, 'b')];
+    const state = replay(engine, ctx, history);
+    const input = { type: 'goal', payload: { side: 'a' } };
+    const viaLog = decide(engine, ctx, history, input);
+    const viaState = decideOnState(engine, state, input);
+    expect(viaState).toEqual(viaLog);
+  });
+
+  it('rejects invalid events and completed matches without needing a log', () => {
+    expect(decideOnState(engine, { a: 0, b: 0 }, { type: 'nope', payload: {} }).ok).toBe(false);
+    expect(decideOnState(engine, { a: 3, b: 0 }, { type: 'goal', payload: { side: 'b' } }).ok).toBe(false);
   });
 });

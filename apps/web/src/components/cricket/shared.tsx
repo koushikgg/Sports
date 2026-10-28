@@ -1,26 +1,7 @@
-import type { BatterStat, Chip, Innings } from '@sports/sports-engine/src/cricket';
+import type { Chip } from '@sports/sports-engine/src/cricket';
 import { cn } from '@/lib/utils';
 
-export type Names = Record<string, string>;
-
-export const nameOf = (names: Names, id: string | null | undefined) => (id ? (names[id] ?? '?') : '');
-
-export function howOut(b: BatterStat, names: Names, innings: Innings): string {
-  const o = b.out;
-  if (!o) return innings.striker === b.id || innings.nonStriker === b.id ? 'batting' : 'not out';
-  const bowler = nameOf(names, o.bowlerId);
-  const fielder = nameOf(names, o.fielderId);
-  switch (o.kind) {
-    case 'bowled': return `b ${bowler}`;
-    case 'caught': return fielder && o.fielderId === o.bowlerId ? `c & b ${bowler}` : `c ${fielder || '?'} b ${bowler}`;
-    case 'lbw': return `lbw b ${bowler}`;
-    case 'stumped': return `st ${fielder || '?'} b ${bowler}`;
-    case 'hit_wicket': return `hit wicket b ${bowler}`;
-    case 'run_out': return fielder ? `run out (${fielder})` : 'run out';
-    case 'retired_hurt': return 'retired hurt';
-    case 'retired_out': return 'retired out';
-  }
-}
+export { howOut, nameOf, type Names } from '@sports/sports-engine/src/cricket-view';
 
 const chipTone: Record<Chip['kind'], string> = {
   dot: 'bg-surface-2 text-muted',

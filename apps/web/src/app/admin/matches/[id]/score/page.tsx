@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import '@sports/sports-engine/src/all';
-import { getSnapshot } from '@sports/scoring';
+import { getMatchCard, getSnapshot } from '@sports/scoring';
 import { PageHeader } from '@/components/ui';
 import { CricketScorer } from '@/components/cricket/scorer';
 import { ScorerDebug } from '@/components/scorer-debug';
@@ -11,18 +11,16 @@ export const dynamic = 'force-dynamic';
 export default async function ScorePage({ params }: { params: Promise<{ id: string }> }) {
   await requireRole('admin', 'scorer');
   const { id } = await params;
-  const snapshot = await getSnapshot(id);
+  const [snapshot, card] = await Promise.all([getSnapshot(id), getMatchCard(id)]);
   if (!snapshot) notFound();
+
+  if (snapshot.sportKey === 'cricket') {
+    return <CricketScorer initial={snapshot} venue={card?.venue} />;
+  }
   return (
     <div className="max-w-xl">
-      {snapshot.sportKey === 'cricket' ? (
-        <CricketScorer initial={snapshot} />
-      ) : (
-        <>
-          <PageHeader title="Scorer console" />
-          <ScorerDebug initial={snapshot} />
-        </>
-      )}
+      <PageHeader title="Scorer console" />
+      <ScorerDebug initial={snapshot} />
     </div>
   );
 }

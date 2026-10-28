@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decide, replay, type LoggedEvent, type MatchContext, type SportEvent } from './index';
-import { cricketEngine as engine, currentInnings, type CricketState } from './cricket';
+import { chipFor, cricketEngine as engine, currentInnings, type CricketState } from './cricket';
 
 const squad = (p: string) => [1, 2, 3, 4].map((n) => ({ id: `${p}${n}`, name: `${p}${n}` }));
 // 4 players a side => max 3 wickets. 2-over match => 12 legal balls.
@@ -335,5 +335,42 @@ describe('undo through decide()', () => {
     const { state } = play([...setup, ...six, ev('undo')]);
     expect(state.awaiting).toBe('ball');
     expect(currentInnings(state)!.thisOver).toHaveLength(5);
+  });
+});
+
+describe('labels and last action', () => {
+  it('labels the sixth ball of an over 0.6, not 1.0', () => {
+    const { state } = play([...setup, ball(0), ball(0), ball(0), ball(0), ball(0), ball(1)]);
+    expect(currentInnings(state)!.log.map((l) => l.over)).toEqual(['0.1', '0.2', '0.3', '0.4', '0.5', '0.6']);
+  });
+
+  it('labels an illegal ball with the slot it is bowled in', () => {
+    const { state } = play([...setup, ball(0), ball(0, { extra: 'wd' })]);
+    expect(currentInnings(state)!.log.map((l) => l.over)).toEqual(['0.1', '0.2']);
+  });
+
+  it('fall of wickets on the last ball of an over reads 0.6', () => {
+    const { state } = play([...setup, ball(), ball(), ball(), ball(), ball(), ball(0, { wicket: { kind: 'bowled', playerId: 'a1' } })]);
+    expect(currentInnings(state)!.fow[0]!.over).toBe('0.6');
+  });
+
+  it('lastAction names what undo would remove, and follows undo', () => {
+    const { state, log } = play([...setup, ball(4), ball(1, { extra: 'lb' })]);
+    expect(state.lastAction).toMatchObject({ type: 'ball', label: '1lb' });
+    const undone = play([ev('undo')], log).state;
+    expect(undone.lastAction).toMatchObject({ type: 'ball', label: '4' });
+  });
+
+  it('lastAction covers non-ball events and wicket players', () => {
+    expect(play([ev('toss', { winnerTeamId: 'A', decision: 'bat' })]).state.lastAction?.label).toBe('TOSS');
+    const w = play([...setup, ball(0, { wicket: { kind: 'bowled', playerId: 'a1' } })]).state.lastAction;
+    expect(w).toMatchObject({ label: 'W', playerId: 'a1' });
+    expect(play([...setup, ev('retire', { playerId: 'a2', kind: 'retired_hurt' })]).state.lastAction).toMatchObject({ type: 'retire', playerId: 'a2' });
+  });
+
+  it('chipFor previews exactly what the engine records', () => {
+    const p = { runs: 2, extra: 'nb' as const, nbKind: 'b' as const };
+    const { state } = play([...setup, ball(p.runs, { extra: p.extra, nbKind: p.nbKind })]);
+    expect(currentInnings(state)!.thisOver[0]).toEqual(chipFor({ ...p }));
   });
 });

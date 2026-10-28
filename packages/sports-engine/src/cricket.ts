@@ -89,6 +89,8 @@ export interface CricketState {
   innings: Innings[];
   awaiting: Awaiting;
   result: CricketResult | null;
+  /** The most recent event still in force, so the UI can say what Undo would remove. */
+  lastAction: { type: string; label: string; playerId?: string } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +101,12 @@ export const BALLS_PER_OVER = 6;
 
 export const formatOvers = (legalBalls: number) =>
   `${Math.floor(legalBalls / BALLS_PER_OVER)}.${legalBalls % BALLS_PER_OVER}`;
+
+/** Ball number as scorers write it: the sixth ball of the first over is 0.6, not 1.0. */
+export const ballLabel = (legalBalls: number) =>
+  legalBalls <= 0
+    ? '0.0'
+    : `${Math.floor((legalBalls - 1) / BALLS_PER_OVER)}.${((legalBalls - 1) % BALLS_PER_OVER) + 1}`;
 
 export const currentInnings = (s: CricketState): Innings | undefined => s.innings.at(-1);
 
@@ -176,6 +184,7 @@ function initialState(ctx: MatchContext): CricketState {
     innings: [],
     awaiting: 'toss',
     result: null,
+    lastAction: null,
   };
   return state;
 }
@@ -301,6 +310,24 @@ function computeResult(s: CricketState): CricketResult {
   return { winnerTeamId: first.battingTeamId, text: `${name(first.battingTeamId)} won by ${diff} run${diff === 1 ? '' : 's'}` };
 }
 
+export type BallPayload = z.infer<typeof schemas.ball>;
+
+/** The chip a delivery produces. Exported so the scorer UI can preview it before sending. */
+export function chipFor(p: BallPayload): Chip {
+  const { runs, extra, wicket } = p;
+  const nbKind = p.nbKind ?? 'bat';
+  const plus = (n: number, suffix = '') => (n ? `+${n}${suffix}` : '');
+  if (wicket) {
+    const prefix = extra === 'wd' ? 'Wd+' : extra === 'nb' ? 'Nb+' : '';
+    return { label: `${prefix}W${runs && !extra ? `+${runs}` : ''}`, kind: 'wicket' };
+  }
+  if (extra === 'wd') return { label: `Wd${plus(runs)}`, kind: 'extra' };
+  if (extra === 'nb') return { label: `Nb${plus(runs, nbKind === 'bat' ? '' : nbKind)}`, kind: 'extra' };
+  if (extra === 'b') return { label: `${runs}b`, kind: 'extra' };
+  if (extra === 'lb') return { label: `${runs}lb`, kind: 'extra' };
+  return { label: String(runs), kind: runs === 0 ? 'dot' : runs === 4 ? 'four' : runs === 6 ? 'six' : 'run' };
+}
+
 function applyBall(s: CricketState, inn: Innings, p: z.infer<typeof schemas.ball>) {
   const { runs, extra, wicket } = p;
   const nbKind = p.nbKind ?? 'bat';
@@ -343,22 +370,12 @@ function applyBall(s: CricketState, inn: Innings, p: z.infer<typeof schemas.ball
   if (extra === 'wd') bowler.wides += 1;
   if (extra === 'nb') bowler.noBalls += 1;
 
-  // --- chip for the over strip + commentary
-  const plus = (n: number, suffix = '') => (n ? `+${n}${suffix}` : '');
-  let chip: Chip;
-  if (wicket) {
-    const prefix = extra === 'wd' ? 'Wd+' : extra === 'nb' ? 'Nb+' : '';
-    chip = { label: `${prefix}W${runs && !extra ? `+${runs}` : ''}`, kind: 'wicket' };
-  } else if (extra === 'wd') chip = { label: `Wd${plus(runs)}`, kind: 'extra' };
-  else if (extra === 'nb') chip = { label: `Nb${plus(runs, nbKind === 'bat' ? '' : nbKind)}`, kind: 'extra' };
-  else if (extra === 'b') chip = { label: `${runs}b`, kind: 'extra' };
-  else if (extra === 'lb') chip = { label: `${runs}lb`, kind: 'extra' };
-  else chip = { label: String(runs), kind: runs === 0 ? 'dot' : runs === 4 ? 'four' : runs === 6 ? 'six' : 'run' };
+  const chip = chipFor(p);
   inn.thisOver.push(chip);
 
   // Ball number within the over: a legal ball is already counted, an illegal one belongs to the next slot.
   const overLabel = legal
-    ? formatOvers(inn.legalBalls)
+    ? ballLabel(inn.legalBalls)
     : `${Math.floor(inn.legalBalls / BALLS_PER_OVER)}.${(inn.legalBalls % BALLS_PER_OVER) + 1}`;
   inn.log.push({
     over: overLabel,
@@ -383,7 +400,7 @@ function applyBall(s: CricketState, inn: Innings, p: z.infer<typeof schemas.ball
     };
     inn.wickets += 1;
     if (BOWLER_WICKETS.has(wicket.kind)) bowler.wickets += 1;
-    inn.fow.push({ runs: inn.runs, wickets: inn.wickets, playerId: wicket.playerId, over: formatOvers(inn.legalBalls) });
+    inn.fow.push({ runs: inn.runs, wickets: inn.wickets, playerId: wicket.playerId, over: ballLabel(inn.legalBalls) });
     inn.partnership = { runs: 0, balls: 0 };
     if (slotS === wicket.playerId) slotS = null;
     else slotN = null;
@@ -478,7 +495,7 @@ function apply(prev: CricketState, event: SportEvent): CricketState {
       else i.nonStriker = null;
       if (p.kind === 'retired_out') {
         i.wickets += 1;
-        i.fow.push({ runs: i.runs, wickets: i.wickets, playerId: p.playerId, over: formatOvers(i.legalBalls) });
+        i.fow.push({ runs: i.runs, wickets: i.wickets, playerId: p.playerId, over: ballLabel(i.legalBalls) });
         if (i.wickets >= maxWicketsFor(s, i.battingTeamId)) closeInnings(s, i, 'all_out');
       }
       i.partnership = { runs: 0, balls: 0 };
@@ -511,8 +528,28 @@ function apply(prev: CricketState, event: SportEvent): CricketState {
     }
   }
 
+  s.lastAction = describeAction(event);
   s.awaiting = deriveAwaiting(s);
   return s;
+}
+
+function describeAction(event: SportEvent): CricketState['lastAction'] {
+  const p = event.payload as Record<string, any>;
+  switch (event.type as EventType) {
+    case 'ball': {
+      const ball = schemas.ball.parse(event.payload);
+      return { type: 'ball', label: chipFor(ball).label, playerId: ball.wicket?.playerId };
+    }
+    case 'toss': return { type: 'toss', label: 'TOSS' };
+    case 'start_innings': return { type: 'start_innings', label: 'INNINGS START' };
+    case 'new_batter': return { type: 'new_batter', label: 'NEW BATTER' };
+    case 'new_bowler': return { type: 'new_bowler', label: 'NEW BOWLER' };
+    case 'swap_strike': return { type: 'swap_strike', label: 'SWAP STRIKE' };
+    case 'retire': return { type: 'retire', label: 'RETIRE', playerId: p.playerId };
+    case 'penalty': return { type: 'penalty', label: `PENALTY +${p.runs}` };
+    case 'end_innings': return { type: 'end_innings', label: 'END INNINGS' };
+    case 'finish': return { type: 'finish', label: 'RESULT' };
+  }
 }
 
 function summary(s: CricketState, ctx: MatchContext): ScoreSummary {
