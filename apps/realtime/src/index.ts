@@ -14,7 +14,8 @@ import { getSnapshot, releaseMatch, submitScoreEvent } from '@sports/scoring';
 import '@sports/sports-engine/src/all';
 
 const port = Number(process.env.REALTIME_PORT ?? 4000);
-const origin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+// One or more allowed web origins, comma separated (for example http://localhost:3000,http://localhost:5175).
+const origin = (process.env.WEB_ORIGIN ?? 'http://localhost:3000').split(',').map((o) => o.trim()).filter(Boolean);
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? '');
 
 const http = createServer((req, res) => {
