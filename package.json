@@ -1,0 +1,23 @@
+{
+  "name": "sports",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:web dev:realtime",
+    "dev:web": "npm run dev -w @sports/web",
+    "dev:realtime": "npm run dev -w @sports/realtime",
+    "build": "npm run build -w @sports/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run generate -w @sports/db",
+    "db:migrate": "npm run migrate -w @sports/db",
+    "db:seed": "npm run seed -w @sports/db"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.3.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": { "node": ">=20" }
+}
