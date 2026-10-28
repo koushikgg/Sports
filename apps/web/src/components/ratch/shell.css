@@ -34,3 +34,19 @@ a.rx-role:hover { filter: brightness(1.2); }
 .rx-crumbs a { color: var(--text-secondary); text-decoration: none; }
 .rx-crumbs a:hover { color: #fff; }
 .rx-crumbs [aria-current='page'] { color: var(--text-primary); }
+
+/* admin section tabs */
+.rx-subnav { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: -4px; }
+.rx-subnav-label { padding-right: 4px; }
+.rx-subnav-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 999px; background: var(--surface-card); }
+.rx-subnav-tabs a { height: 32px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 999px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-secondary); text-decoration: none; transition: background 200ms; }
+.rx-subnav-tabs a:hover { color: #fff; }
+.rx-subnav-tabs a[data-active='true'] { background: var(--blue); color: #fff; }
+.rx-signout { margin-left: auto; height: 32px; padding: 0 14px; border-radius: 999px; background: transparent; color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; border: none; }
+.rx-signout:hover { color: #fff; background: var(--surface-card); }
+
+/* signed-out: a clear primary login button in the top right */
+.rx-login { margin-left: auto; display: inline-flex; align-items: center; height: 36px; padding: 0 20px; border-radius: 999px; background: var(--blue); color: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-decoration: none; transition: filter 150ms, transform 120ms; }
+.rx-login:hover { filter: brightness(1.12); color: #fff; }
+.rx-login:active { transform: scale(0.97); }
+@media (max-width: 720px) { .rx-login { order: 2; } }

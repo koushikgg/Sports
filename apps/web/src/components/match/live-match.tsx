@@ -209,7 +209,7 @@ export function MatchHeader({ card, sportName, canScore }: { card: MatchCardData
           <h1>{card.teamA} <span>vs</span> {card.teamB}</h1>
         </div>
         <div className="mp-actions">
-          {canScore && !finished && <Link href={`/admin/matches/${card.id}/score`} className="mx-btn mx-btn-lg" data-variant="amber">OPEN SCORER</Link>}
+          {canScore && !finished && <Link href={`/score/${card.id}`} className="mx-btn mx-btn-lg" data-variant="amber">OPEN SCORER</Link>}
           <Link href={`/display/${card.id}`} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE ↗</Link>
         </div>
       </div>

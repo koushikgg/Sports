@@ -1,101 +1,122 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getCricketLeaders } from '@sports/scoring';
-import { CricketLeaders } from '@/components/leaders';
-import { LiveNow } from '@/components/live-now';
-import { MatchCard } from '@/components/match-card';
-import { PublicShell } from '@/components/public-shell';
+import '@sports/sports-engine/src/all';
+import { getCricketLeaders, getSnapshot, listTournaments } from '@sports/scoring';
+import { Featured } from '@/components/matches/featured';
+import { sportColor, statusGroup } from '@/components/matches/model';
+import { RatchShell } from '@/components/ratch/shell';
+import '@/components/showcase/showcase.css';
+import { TileGrid } from '@/components/showcase/tiles';
+import { LeaderBoard } from '@/components/sports/leaders';
+import { canScoreMatch } from '@sports/shared';
 import { getAllSports, listMatchCards } from '@/lib/queries';
+import { getShellUser } from '@/lib/shell-user';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = {
+  title: { absolute: 'Sports Hub — every match, live' },
+  description: 'Live scores, fixtures, standings and results for every game played around the office.',
+};
 
-function Section({ id, title, action, children }: { id?: string; title: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section id={id} aria-labelledby={`${id ?? title}-h`} className="mt-12 scroll-mt-20">
-      <div className="mb-4 flex items-baseline justify-between">
-        <h2 id={`${id ?? title}-h`} className="text-xl font-semibold">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
+const BAND = {
+  guest: { title: 'Run the games? Sign in.', text: 'Organisers and scorers sign in to schedule matches and keep the live score moving.', href: '/login', label: 'SIGN IN' },
+  scorer: { title: 'Your scoring queue', text: 'Matches assigned to you, and matches with no scorer yet, are waiting.', href: '/score', label: 'OPEN QUEUE' },
+  admin: { title: 'Set up the next game', text: 'Create a tournament with its teams and rules, or schedule a single match with playing XIs.', href: '/create', label: 'CREATE' },
+} as const;
 
-const empty = (text: string) => (
-  <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">{text}</p>
-);
-
-export default async function Home() {
-  const [allSports, live, upcoming, results, leaders] = await Promise.all([
+export default async function Showcase() {
+  const { user } = await getShellUser();
+  const signedIn = !!user;
+  const [matches, sports, tournaments] = await Promise.all([
+    listMatchCards({ limit: 200, signedIn }),
     getAllSports(),
-    listMatchCards({ statuses: ['live', 'paused'] }),
-    listMatchCards({ statuses: ['scheduled'], order: 'upcoming', limit: 6 }),
-    listMatchCards({ statuses: ['completed'], limit: 6 }),
-    getCricketLeaders(5),
+    listTournaments(signedIn),
   ]);
-  const cricketOn = allSports.some((s) => s.key === 'cricket' && s.enabled);
+
+  const live = matches.filter((m) => statusGroup(m.status) === 'live');
+  const upcoming = matches.filter((m) => m.status === 'scheduled').sort((a, b) => (a.scheduledAt ?? '9999').localeCompare(b.scheduledAt ?? '9999')).slice(0, 3);
+  const results = matches.filter((m) => statusGroup(m.status) === 'ft').slice(0, 3);
+  const spotlight = live.filter((m) => m.sportKey === 'cricket').sort((a, b) => b.seq - a.seq)[0];
+  const [featured, leaders] = await Promise.all([
+    spotlight ? getSnapshot(spotlight.id) : null,
+    sports.some((s) => s.key === 'cricket' && s.enabled) ? getCricketLeaders(5) : null,
+  ]);
+  const ongoing = tournaments.filter((t) => t.status !== 'done').slice(0, 3);
+  const band = BAND[user?.role ?? 'guest'];
 
   return (
-    <PublicShell>
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface via-surface-2 to-bg px-6 py-14 text-center sm:py-20">
-        <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 h-64 w-[36rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl" />
-        <p className="relative text-sm font-medium uppercase tracking-widest text-brand">Company sports</p>
-        <h1 className="relative mt-3 text-4xl font-bold tracking-tight sm:text-6xl">
-          Every match. <span className="text-brand">Live.</span>
-        </h1>
-        <p className="relative mx-auto mt-4 max-w-xl text-muted">
-          Ball-by-ball scores, fixtures and results for every game played around the office.
-        </p>
-        <div className="relative mt-8 flex flex-wrap justify-center gap-3">
-          <a href="#live" className="rounded-md bg-brand px-5 py-2.5 font-medium text-black">
-            {live.length > 0 ? `${live.length} live now` : 'See live scores'}
-          </a>
-          <Link href="/sports" className="rounded-md border border-border px-5 py-2.5 font-medium hover:bg-surface-2">Browse sports</Link>
+    <RatchShell active="home" user={user}>
+      <section className="sx-hero" aria-label="Welcome">
+        <div>
+          <span className="sx-eyebrow">COMPANY SPORTS</span>
+          <h1>Every match. <span>Live.</span></h1>
+          <p>Ball-by-ball scores, fixtures, standings and results for every game played around the office.</p>
+          <div className="sx-cta">
+            <Link href="/matches" className="mx-btn mx-btn-lg" data-variant="amber">{live.length ? `${live.length} LIVE NOW` : 'SEE ALL MATCHES'}</Link>
+            <Link href="/tournaments" className="mx-btn mx-btn-lg" data-variant="gray">TOURNAMENTS</Link>
+            {user && <Link href={user.role === 'admin' ? '/create' : '/score'} className="mx-btn mx-btn-lg" data-variant="blue">{user.role === 'admin' ? 'CREATE' : 'SCORE'}</Link>}
+          </div>
+        </div>
+        <div className="sx-hero-card">
+          {featured && spotlight ? (
+            <Featured key={featured.matchId} initial={featured} competition={spotlight.competition} canScore={canScoreMatch(user, spotlight)} />
+          ) : (
+            <p className="sx-empty">No match is live right now. The next fixtures are below.</p>
+          )}
         </div>
       </section>
 
-      <Section id="live" title="Live now">
-        <LiveNow key={live.map((m) => m.id).join()} matches={live} />
-      </Section>
+      <section className="sx-stats" aria-label="At a glance">
+        <Link href="/matches" className="sx-stat" data-live={live.length > 0 ? 'true' : undefined}><b>{live.length}</b><span className="lbl">LIVE NOW</span></Link>
+        <Link href="/matches" className="sx-stat"><b>{matches.filter((m) => m.status === 'scheduled').length}</b><span className="lbl">UPCOMING</span></Link>
+        <Link href="/matches" className="sx-stat"><b>{matches.filter((m) => statusGroup(m.status) === 'ft').length}</b><span className="lbl">RESULTS</span></Link>
+        <Link href="/tournaments" className="sx-stat"><b>{tournaments.length}</b><span className="lbl">TOURNAMENTS</span></Link>
+      </section>
 
-      <Section title="Sports">
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {allSports.map((s) => (
-            <li key={s.id}>
-              {s.enabled ? (
-                <Link href={`/sports/${s.key}`} className="block rounded-xl border border-border bg-surface p-6 transition hover:border-brand/60 focus-visible:outline-2 focus-visible:outline-brand">
-                  <div className="text-lg font-semibold">{s.name}</div>
-                  <div className="mt-1 text-sm text-muted">
-                    {live.filter((m) => m.sportKey === s.key).length} live · {upcoming.filter((m) => m.sportKey === s.key).length} upcoming
-                  </div>
-                </Link>
-              ) : (
-                <div aria-disabled className="rounded-xl border border-dashed border-border p-6 opacity-60">
-                  <div className="text-lg font-semibold">{s.name}</div>
-                  <div className="mt-1 text-sm text-muted">Coming soon</div>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Section>
+      <section className="sx-section" aria-labelledby="live-h">
+        <div className="sx-section-head"><h2 id="live-h">Live now</h2><span style={{ flex: 1 }} /><Link href="/matches" className="mx-viewall">ALL MATCHES</Link></div>
+        <TileGrid matches={live.slice(0, 3)} viewer={user} empty="No matches are live right now." />
+      </section>
 
-      <Section title="Upcoming">
-        {upcoming.length === 0 ? empty('No fixtures scheduled.') : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{upcoming.map((m) => <MatchCard key={m.id} m={m} />)}</div>
-        )}
-      </Section>
+      <div className="sx-two">
+        <section className="sx-section" aria-labelledby="up-h">
+          <div className="sx-section-head"><h2 id="up-h">Upcoming</h2></div>
+          <TileGrid matches={upcoming} viewer={user} empty="No fixtures scheduled." />
+        </section>
+        <section className="sx-section" aria-labelledby="res-h">
+          <div className="sx-section-head"><h2 id="res-h">Recent results</h2></div>
+          <TileGrid matches={results} viewer={user} empty="No results yet." />
+        </section>
+      </div>
 
-      <Section title="Recent results">
-        {results.length === 0 ? empty('No results yet.') : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{results.map((m) => <MatchCard key={m.id} m={m} />)}</div>
-        )}
-      </Section>
-
-      {cricketOn && (
-        <Section title="Cricket leaders">
-          <CricketLeaders {...leaders} />
-        </Section>
+      {ongoing.length > 0 && (
+        <section className="sx-section" aria-labelledby="tour-h">
+          <div className="sx-section-head"><h2 id="tour-h">Tournaments</h2><span style={{ flex: 1 }} /><Link href="/tournaments" className="mx-viewall">ALL TOURNAMENTS</Link></div>
+          <div className="tn-grid">
+            {ongoing.map((t) => (
+              <Link key={t.id} href={`/tournaments?t=${t.id}`} className="tn-card" style={{ ['--tn' as string]: sportColor(t.sportKey) }}>
+                <div className="cw-row-between"><span className="lbl">{t.sportName.toUpperCase()}</span><span className="mx-badge" data-tone={t.status === 'live' ? 'live' : 'up'}><i />{t.status === 'live' ? 'ONGOING' : 'UPCOMING'}</span></div>
+                <div><b className="tn-name">{t.name}</b><small>{t.formatLabel} · {t.teamCount} teams</small></div>
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
-    </PublicShell>
+
+      {leaders && (leaders.runs.length > 0 || leaders.wickets.length > 0) && (
+        <section className="sx-section" aria-labelledby="lead-h">
+          <div className="sx-section-head"><h2 id="lead-h">Cricket leaders</h2></div>
+          <div className="sx-two">
+            <LeaderBoard title="TOP RUN-SCORERS" unit="runs" rows={leaders.runs} />
+            <LeaderBoard title="TOP WICKET-TAKERS" unit="wkts" rows={leaders.wickets} />
+          </div>
+        </section>
+      )}
+
+      <section className="sx-band" aria-label={band.title}>
+        <div><h2>{band.title}</h2><p>{band.text}</p></div>
+        <Link href={band.href} className="mx-btn mx-btn-lg" data-variant="amber">{band.label}</Link>
+      </section>
+    </RatchShell>
   );
 }

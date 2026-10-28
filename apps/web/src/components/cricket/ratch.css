@@ -235,3 +235,5 @@
   .sc-scrim { padding: 24px 12px 12px; align-items: flex-end; }
   .sc-sheet { border-radius: 20px 20px 16px 16px; padding: 20px; }
 }
+
+.sc-freehit { color: var(--amber); font-weight: 700; }

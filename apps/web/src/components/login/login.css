@@ -1,0 +1,47 @@
+/* Login (Ratch). Split screen: brand panel + sign-in panel. Tokens come from styles/ratch-base.css. */
+.lg-page { min-height: 100dvh; display: flex; flex-wrap: wrap; background: var(--surface-canvas); }
+.lg-brand { flex: 1 1 520px; min-height: 560px; position: relative; overflow: hidden; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; background: radial-gradient(60% 60% at 20% 15%, color-mix(in srgb, #ffdb4d 14%, transparent), transparent 70%), radial-gradient(50% 50% at 90% 90%, color-mix(in srgb, #006cff 20%, transparent), transparent 70%), #101114; }
+.lg-logo { display: flex; align-items: center; gap: 10px; color: var(--text-primary); text-decoration: none; }
+.lg-logo i { width: 14px; height: 14px; border-radius: 4px; background: var(--amber); }
+.lg-logo b { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.02em; }
+.lg-pitch { display: flex; flex-direction: column; gap: 28px; max-width: 520px; }
+.lg-pitch h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(38px, 4.4vw, 60px); line-height: 1.02; letter-spacing: -0.03em; text-wrap: balance; }
+.lg-pitch h1 span { color: var(--amber); }
+.lg-pitch p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text-secondary); text-wrap: pretty; }
+.lg-card { padding: 18px 20px; border-radius: 20px; background: rgba(23, 24, 28, 0.85); display: flex; flex-direction: column; gap: 12px; transition: opacity 400ms var(--ease-out), transform 400ms var(--ease-out); }
+.lg-card[data-out='true'] { opacity: 0; transform: translateY(8px); }
+.lg-card-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.lg-card-row.lg-base { align-items: baseline; }
+.lg-card-match { font-size: 17px; font-weight: 600; }
+.lg-card-score { font-family: var(--font-display); font-size: 30px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+.lg-card-line { font-size: 13px; color: var(--amber); }
+.lg-sports { display: flex; flex-wrap: wrap; gap: 24px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-tertiary); }
+
+.lg-panel { flex: 1 1 440px; display: flex; align-items: center; justify-content: center; padding: 40px 24px; box-sizing: border-box; }
+.lg-form { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 24px; }
+.lg-form h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 32px; letter-spacing: -0.02em; }
+.lg-form .lg-sub { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
+.lg-google { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; height: 52px; border-radius: 999px; background: #f4f5f7; color: #101828; font-family: var(--font-sans); font-size: 15px; font-weight: 600; transition: background 200ms, transform 120ms, filter 150ms; }
+.lg-google:hover:not(:disabled) { filter: brightness(0.95); }
+.lg-google:active:not(:disabled) { transform: scale(0.98); }
+.lg-google:disabled { cursor: default; }
+.lg-g { width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #e5e7eb; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #4285f4; }
+.lg-google[data-busy='true'] .lg-g { animation: sc-blink 1s ease-in-out infinite; }
+.lg-error { padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, #ff383c 12%, transparent); font-size: 13px; line-height: 1.5; color: var(--red-text); }
+.lg-note { padding: 14px 16px; border-radius: 14px; background: var(--surface-card); display: flex; flex-direction: column; gap: 4px; }
+.lg-note span:last-child { font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.lg-viewer { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-align: center; color: #4d94ff; text-decoration: none; }
+.lg-viewer:hover { color: #fff; }
+.lg-fine { font-size: 12px; color: var(--text-tertiary); text-align: center; line-height: 1.5; }
+
+.lg-pw { border-radius: 14px; background: var(--surface-card); }
+.lg-pw summary { cursor: pointer; padding: 14px 16px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-secondary); list-style: none; }
+.lg-pw summary::-webkit-details-marker { display: none; }
+.lg-pw summary:hover { color: #fff; }
+.lg-pw form { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 16px; }
+.lg-pw input { height: 44px; padding: 0 14px; border-radius: 8px; border: none; outline: none; background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; }
+.lg-pw input:focus-visible { box-shadow: 0 0 0 2px var(--blue); }
+.lg-pw button { height: 44px; border-radius: 999px; background: var(--surface-muted); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
+.lg-pw button:hover { filter: brightness(1.15); }
+
+@media (max-width: 720px) { .lg-brand { min-height: 0; padding: 28px 20px; } .lg-pitch { gap: 18px; } .lg-sports { display: none; } }

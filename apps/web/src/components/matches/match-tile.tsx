@@ -58,7 +58,7 @@ function View({
       <div className="mx-card-foot">
         <span className="mx-venue">{m.venue ?? ''}</span>
         {canOpenScorer && (
-          <Link href={`/admin/matches/${m.id}/score`} className="mx-btn" data-variant="amber">
+          <Link href={`/score/${m.id}`} className="mx-btn" data-variant="amber">
             {group === 'live' ? 'RESUME SCORING' : 'START SCORING'}
           </Link>
         )}

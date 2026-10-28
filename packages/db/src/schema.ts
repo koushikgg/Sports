@@ -48,6 +48,12 @@ export const sports = pgTable('sports', {
   createdAt: createdAt(),
 });
 
+export const venues = pgTable('venues', {
+  id: id(),
+  name: text('name').notNull().unique(),
+  createdAt: createdAt(),
+});
+
 export const teams = pgTable('teams', {
   id: id(),
   sportId: uuid('sport_id').notNull().references(() => sports.id),
@@ -63,6 +69,8 @@ export const players = pgTable('players', {
   email: text('email'),
   employeeId: text('employee_id'),
   avatarUrl: text('avatar_url'),
+  /** Playing role shown in squad pickers: BAT, BOWL, AR or WK. */
+  role: text('role'),
   createdAt: createdAt(),
 });
 
@@ -83,6 +91,8 @@ export const tournaments = pgTable('tournaments', {
   format: tournamentFormatEnum('format').notNull().default('friendly'),
   startsAt: timestamp('starts_at', { withTimezone: true }),
   endsAt: timestamp('ends_at', { withTimezone: true }),
+  /** Everything the create wizard collected (format, rules, points, teams, schedule...). See TournamentMeta. */
+  meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
 });
 
@@ -100,7 +110,14 @@ export const matches = pgTable('matches', {
   result: jsonb('result').$type<Record<string, unknown> | null>(),
   /** Highest event seq written; bumped inside the scoring transaction. */
   lastSeq: integer('last_seq').notNull().default(0),
+  /** Scorer who holds the scoring lock right now (set on the first event). */
   scorerId: uuid('scorer_id').references(() => users.id),
+  /** Scorer assigned by the organiser. If set, only this scorer (or an admin) may score. */
+  assignedScorerId: uuid('assigned_scorer_id').references(() => users.id),
+  /** public: listed for everyone. link: not listed, reachable by URL. private: signed-in members only. */
+  visibility: text('visibility').notNull().default('public'),
+  /** Umpires and anything else the match wizard collected. */
+  meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
 });
 

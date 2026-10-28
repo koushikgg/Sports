@@ -1,5 +1,6 @@
 import { currentInnings, formatOvers, runRate, type CricketState } from '@sports/sports-engine/src/cricket';
-import { ChipStrip, nameOf, type Names } from './shared';
+import { nameOf, type Names } from '@sports/sports-engine/src/cricket-view';
+import { Chip } from '@/components/ratch/chip';
 
 /** Big-screen layout: readable from across the room. */
 export function CricketTv({ state, names, status }: { state: CricketState; names: Names; status: string }) {
@@ -48,7 +49,12 @@ export function CricketTv({ state, names, status }: { state: CricketState; names
       )}
 
       <div className="space-y-6">
-        {live && <ChipStrip chips={inn.thisOver} size="lg" className="justify-center" />}
+        {live && (
+          <div className="flex flex-wrap justify-center gap-3">
+            {inn.thisOver.map((c, i) => <Chip key={i} chip={c} size="lg" />)}
+            {Array.from({ length: 6 - (inn.legalBalls % 6) }, (_, i) => <Chip key={`e${i}`} chip={null} size="lg" />)}
+          </div>
+        )}
         <p className="text-center text-5xl font-semibold text-brand">{status}</p>
       </div>
     </div>

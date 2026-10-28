@@ -1,6 +1,8 @@
 'use client';
 import { useMemo, useState } from 'react';
 import type { Leader } from '@sports/scoring';
+import { canScoreMatch } from '@sports/shared';
+import type { ShellUser } from '@/components/ratch/shell';
 import { MatchTile } from '@/components/matches/match-tile';
 import { sportColor, statusGroup, type StatusGroup } from '@/components/matches/model';
 import { useNow } from '@/components/matches/time';
@@ -17,12 +19,12 @@ const SECTIONS: { key: StatusGroup; title: string; empty: string }[] = [
 ];
 
 export function SportHub({
-  sport, matches, leaders, canScore,
+  sport, matches, leaders, viewer,
 }: {
   sport: { key: string; name: string };
   matches: MatchCardData[];
   leaders: { runs: Leader[]; wickets: Leader[] } | null;
-  canScore: boolean;
+  viewer: ShellUser | null;
 }) {
   useLiveRefresh();
   const now = useNow();
@@ -85,7 +87,7 @@ export function SportHub({
                 {items.length === 0 ? (
                   <p className="sh-empty">{term ? 'No matches match your search.' : sec.empty}</p>
                 ) : (
-                  <div className="mx-grid">{items.map((m) => <MatchTile key={m.id} m={m} canScore={canScore} now={now} />)}</div>
+                  <div className="mx-grid">{items.map((m) => <MatchTile key={m.id} m={m} canScore={canScoreMatch(viewer, m)} now={now} />)}</div>
                 )}
               </section>
             );

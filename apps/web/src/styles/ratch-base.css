@@ -28,8 +28,13 @@
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
-.ratch button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
-.ratch button:disabled { cursor: not-allowed; }
+/* Resets live in the base layer with zero specificity: any class, and Tailwind utilities, can override
+   them. (Unlayered rules always beat layered ones, so a plain `.ratch button { color: inherit }` would
+   override every utility and wash out button labels.) */
+@layer base {
+  :where(.ratch) button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
+  :where(.ratch) button:disabled { cursor: not-allowed; }
+}
 .ratch :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* mono "system voice" labels */

@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Matches', description: 'Live scores, fixtures and results for every sport.' };
 
 export default async function MatchesPage() {
-  const [{ user, canScore }, matches, sports] = await Promise.all([getShellUser(), listMatchCards({ limit: 200 }), getEnabledSports()]);
+  const [{ user }, sports] = await Promise.all([getShellUser(), getEnabledSports()]);
+  const matches = await listMatchCards({ limit: 200, signedIn: !!user });
 
   // Feature the live cricket match with the most activity.
   const live = matches.filter((m) => m.sportKey === 'cricket' && m.status === 'live').sort((a, b) => b.seq - a.seq)[0];
@@ -24,7 +25,7 @@ export default async function MatchesPage() {
         sports={sports.map((s) => ({ key: s.key, name: s.name }))}
         featured={featured}
         featuredCompetition={live?.competition ?? null}
-        canScore={canScore}
+        viewer={user}
       />
     </RatchShell>
   );

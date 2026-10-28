@@ -7,11 +7,6 @@ export const authConfig = {
   session: { strategy: 'jwt' },
   providers: [],
   callbacks: {
-    authorized({ auth, request }) {
-      const path = request.nextUrl.pathname;
-      if (!path.startsWith('/admin')) return true;
-      return !!auth?.user;
-    },
     jwt({ token, user }) {
       if (user) {
         token.uid = user.id;

@@ -2,10 +2,13 @@ import {
   alias,
   and,
   asc,
+  count,
+  desc,
   eq,
   getDb,
   inArray,
   matchEvents,
+  matchLineups,
   matches,
   matchStates,
   players,
@@ -16,8 +19,11 @@ import {
   tournaments,
   type Reader,
 } from '@sports/db';
-import type { Ack, MatchSnapshot, MatchUpdate, Role, ScoreEventInput, ScoreSummary, SportKey } from '@sports/shared';
+import { FORMATS, type Ack, type FormatKey, type MatchSnapshot, type MatchUpdate, type Role, type ScoreEventInput, type ScoreSummary, type SportKey, type TournamentMeta } from '@sports/shared';
 import { formatOvers, type CricketState } from '@sports/sports-engine/src/cricket';
+import { matchTeamStats } from '@sports/sports-engine/src/cricket-view';
+import { computeStandings, type FinishedMatch, type Standing } from '@sports/sports-engine/src/standings';
+import { projectKnockout, projectLeagueKnockout, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
 import {
   decide,
   decideOnState,
@@ -35,8 +41,8 @@ const CLOSED = ['completed', 'abandoned'];
 type Loaded = { engine: SportEngine; ctx: MatchContext; sportKey: SportKey };
 
 async function loadContext(db: Reader, match: MatchRow): Promise<Loaded> {
-  // Three independent reads: run them together so it costs one round trip, not three.
-  const [sportRows, teamRows, memberRows] = await Promise.all([
+  // Independent reads: run them together so it costs one round trip.
+  const [sportRows, teamRows, memberRows, lineupRows] = await Promise.all([
     db.select().from(sports).where(eq(sports.id, match.sportId)).limit(1),
     db.select().from(teams).where(inArray(teams.id, [match.teamAId, match.teamBId])),
     db
@@ -45,15 +51,24 @@ async function loadContext(db: Reader, match: MatchRow): Promise<Loaded> {
       .innerJoin(players, eq(players.id, teamMembers.playerId))
       .where(inArray(teamMembers.teamId, [match.teamAId, match.teamBId]))
       .orderBy(asc(players.name)),
+    db
+      .select({ teamId: matchLineups.teamId, id: players.id, name: players.name, position: matchLineups.position, isCaptain: matchLineups.isCaptain, isKeeper: matchLineups.isKeeper })
+      .from(matchLineups)
+      .innerJoin(players, eq(players.id, matchLineups.playerId))
+      .where(eq(matchLineups.matchId, match.id))
+      .orderBy(asc(matchLineups.position), asc(players.name)),
   ]);
   const sport = sportRows[0];
   if (!sport) throw new Error('Sport missing');
   const byId = new Map(teamRows.map((t) => [t.id, t.name]));
-  const squads: Record<string, { id: string; name: string }[]> = {
+  const squads: Record<string, { id: string; name: string; isCaptain?: boolean; isKeeper?: boolean }[]> = {
     [match.teamAId]: [],
     [match.teamBId]: [],
   };
-  for (const m of memberRows) squads[m.teamId]?.push({ id: m.id, name: m.name });
+  // If the organiser picked a playing XI for a side, that is the squad; otherwise the whole roster.
+  const hasXi = new Set(lineupRows.map((l) => l.teamId));
+  for (const m of memberRows) if (!hasXi.has(m.teamId)) squads[m.teamId]?.push({ id: m.id, name: m.name });
+  for (const l of lineupRows) squads[l.teamId]?.push({ id: l.id, name: l.name, isCaptain: l.isCaptain, isKeeper: l.isKeeper });
 
   const ctx: MatchContext = {
     matchId: match.id,
@@ -162,6 +177,10 @@ export async function submitScoreEvent(actor: Actor, input: ScoreEventInput): Pr
     return { ok: false, code: 'locked', message: 'Another scorer is scoring this match' };
   }
 
+  if (match.assignedScorerId && match.assignedScorerId !== actor.sub && actor.role !== 'admin') {
+    return { ok: false, code: 'forbidden', message: 'This match is assigned to another scorer' };
+  }
+
   const { engine, ctx } = await getContext(db, match);
   // A replay is only needed for undo, or when there is no usable cached state yet.
   const history = (): Promise<LoggedEvent[]> =>
@@ -252,6 +271,10 @@ export interface MatchCardData {
   competition: string | null;
   /** Who won a finished match; null for a tie, no result or an unfinished match. */
   winner: 'a' | 'b' | null;
+  tournamentId: string | null;
+  /** The scorer the organiser assigned, if any. */
+  assignedScorerId: string | null;
+  visibility: 'public' | 'link' | 'private';
   summary: ScoreSummary;
 }
 
@@ -259,6 +282,9 @@ export interface MatchCardQuery {
   sportKey?: string;
   statuses?: MatchRow['status'][];
   matchId?: string;
+  tournamentId?: string;
+  /** Whether the viewer is signed in: members-only matches are hidden from everyone else. */
+  signedIn?: boolean;
   limit?: number;
   /** `upcoming` = soonest first; `recent` (default) = newest first. */
   order?: 'upcoming' | 'recent';
@@ -274,6 +300,13 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
   if (q.sportKey) filters.push(eq(sports.key, q.sportKey));
   if (q.statuses) filters.push(inArray(matches.status, q.statuses));
   if (q.matchId) filters.push(eq(matches.id, q.matchId));
+  if (q.tournamentId) filters.push(eq(matches.tournamentId, q.tournamentId));
+  // public: listed for all. link: reachable by URL only, never listed. private: signed-in members only.
+  filters.push(
+    q.matchId
+      ? q.signedIn ? sql`true` : sql`${matches.visibility} <> 'private'`
+      : q.signedIn ? sql`${matches.visibility} in ('public', 'private')` : sql`${matches.visibility} = 'public'`,
+  );
 
   const rows = await db
     .select({
@@ -332,13 +365,16 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
         r.match.result?.winnerTeamId === r.match.teamAId ? 'a'
         : r.match.result?.winnerTeamId === r.match.teamBId ? 'b'
         : null,
+      tournamentId: r.match.tournamentId,
+      assignedScorerId: r.match.assignedScorerId,
+      visibility: r.match.visibility as MatchCardData['visibility'],
       summary: engine.summary(state, ctx),
     };
   });
 }
 
-export async function getMatchCard(matchId: string): Promise<MatchCardData | null> {
-  return (await listMatchCards({ matchId, limit: 1 }))[0] ?? null;
+export async function getMatchCard(matchId: string, signedIn = false): Promise<MatchCardData | null> {
+  return (await listMatchCards({ matchId, signedIn, limit: 1 }))[0] ?? null;
 }
 
 export interface Leader {
@@ -350,13 +386,13 @@ export interface Leader {
 }
 
 /** Top run-scorers and wicket-takers across all cricket matches. */
-export async function getCricketLeaders(limit = 5): Promise<{ runs: Leader[]; wickets: Leader[] }> {
+export async function getCricketLeaders(limit = 5, tournamentId?: string): Promise<{ runs: Leader[]; wickets: Leader[] }> {
   const rows = await getDb()
     .select({ state: matchStates.state })
     .from(matchStates)
     .innerJoin(matches, eq(matches.id, matchStates.matchId))
     .innerJoin(sports, eq(sports.id, matches.sportId))
-    .where(and(eq(sports.key, 'cricket'), eq(sports.enabled, true)));
+    .where(and(eq(sports.key, 'cricket'), eq(sports.enabled, true), ...(tournamentId ? [eq(matches.tournamentId, tournamentId)] : [])));
 
   const bat = new Map<string, { runs: number; balls: number }>();
   const bowl = new Map<string, { wickets: number; runs: number; balls: number }>();
@@ -395,5 +431,174 @@ export async function getCricketLeaders(limit = 5): Promise<{ runs: Leader[]; wi
       value: v.wickets,
       detail: `${formatOvers(v.balls)} ov · ${v.runs} runs`,
     })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tournaments
+// ---------------------------------------------------------------------------
+
+export interface TournamentSummary {
+  id: string;
+  name: string;
+  sportKey: SportKey;
+  sportName: string;
+  formatKey: FormatKey;
+  formatLabel: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  venues: string[];
+  teamCount: number;
+  /** Matches finished / matches the tournament has or is planned to have. */
+  played: number;
+  total: number;
+  status: 'live' | 'up' | 'done';
+}
+
+export interface StandingRow extends Standing {
+  name: string;
+  short: string | null;
+}
+
+export interface TournamentDetail extends TournamentSummary {
+  meta: TournamentMeta | null;
+  standings: StandingRow[];
+  /** The tournament's matches (fixtures made through the match wizard), with scores. */
+  matches: MatchCardData[];
+  leaders: { runs: Leader[]; wickets: Leader[] } | null;
+  /** A projection from the standings (or seeding), not fixtures. */
+  bracket: { rounds: BracketRound[]; seeds: string[]; projected: boolean } | null;
+  qualify: number;
+  tiebreak: string;
+  hasFixtures: boolean;
+}
+
+const DEFAULT_POINTS = { win: 2, tie: 1, noResult: 1 };
+
+function visibilityFilter(signedIn: boolean) {
+  return signedIn ? sql`${matches.visibility} in ('public', 'private')` : sql`${matches.visibility} = 'public'`;
+}
+
+function statusOf(t: { startsAt: Date | null; endsAt: Date | null }, c: { created: number; played: number; open: number; active: boolean }, total: number): TournamentSummary['status'] {
+  const now = Date.now();
+  if (total > 0 && c.played >= total) return 'done';
+  if (t.endsAt && t.endsAt.getTime() + 86_400_000 < now && c.open === 0) return 'done';
+  if (c.active || (t.startsAt && t.startsAt.getTime() <= now)) return 'live';
+  return 'up';
+}
+
+function summarise(
+  row: { t: typeof tournaments.$inferSelect; sportKey: string; sportName: string },
+  counts: { status: string; n: number }[],
+): TournamentSummary {
+  const meta = row.t.meta as unknown as TournamentMeta;
+  const n = (statuses: string[]) => counts.filter((c) => statuses.includes(c.status)).reduce((a, c) => a + c.n, 0);
+  const created = counts.reduce((a, c) => a + c.n, 0);
+  const played = n(['completed']);
+  const total = Math.max(created, meta.plan?.totalMatches ?? 0);
+  const formatKey = (meta.formatKey ?? 'league') as FormatKey;
+  return {
+    id: row.t.id,
+    name: row.t.name,
+    sportKey: row.sportKey as SportKey,
+    sportName: row.sportName,
+    formatKey,
+    formatLabel: FORMATS[formatKey]?.label ?? 'League',
+    startsAt: row.t.startsAt?.toISOString() ?? null,
+    endsAt: row.t.endsAt?.toISOString() ?? null,
+    venues: (meta.venues ?? []).map((v) => v.name),
+    teamCount: meta.teams?.length ?? 0,
+    played,
+    total,
+    status: statusOf(row.t, { created, played, open: n(['scheduled', 'live', 'paused']), active: n(['live', 'paused', 'completed']) > 0 }, total),
+  };
+}
+
+export async function listTournaments(signedIn = false): Promise<TournamentSummary[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ t: tournaments, sportKey: sports.key, sportName: sports.name })
+    .from(tournaments)
+    .innerJoin(sports, eq(sports.id, tournaments.sportId))
+    .where(eq(sports.enabled, true))
+    .orderBy(desc(tournaments.startsAt), desc(tournaments.createdAt));
+  if (rows.length === 0) return [];
+
+  const counted = await db
+    .select({ tournamentId: matches.tournamentId, status: matches.status, n: count() })
+    .from(matches)
+    .where(and(inArray(matches.tournamentId, rows.map((r) => r.t.id)), visibilityFilter(signedIn)))
+    .groupBy(matches.tournamentId, matches.status);
+
+  return rows.map((r) => summarise(r, counted.filter((c) => c.tournamentId === r.t.id).map((c) => ({ status: c.status, n: Number(c.n) }))));
+}
+
+export async function getTournamentDetail(id: string, signedIn = false): Promise<TournamentDetail | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ t: tournaments, sportKey: sports.key, sportName: sports.name })
+    .from(tournaments)
+    .innerJoin(sports, eq(sports.id, tournaments.sportId))
+    .where(and(eq(tournaments.id, id), eq(sports.enabled, true)))
+    .limit(1);
+  if (!row) return null;
+
+  const meta = (row.t.meta as unknown as TournamentMeta) ?? null;
+  const teamIds = (meta?.teams ?? []).map((t) => t.id);
+
+  const [cards, teamRows, finishedRows] = await Promise.all([
+    listMatchCards({ tournamentId: id, signedIn, limit: 500 }),
+    teamIds.length ? db.select({ id: teams.id, name: teams.name, shortName: teams.shortName }).from(teams).where(inArray(teams.id, teamIds)) : Promise.resolve([]),
+    db
+      .select({ match: matches, state: matchStates.state })
+      .from(matches)
+      .leftJoin(matchStates, eq(matchStates.matchId, matches.id))
+      .where(and(eq(matches.tournamentId, id), eq(matches.status, 'completed'), visibilityFilter(signedIn)))
+      .orderBy(asc(matches.scheduledAt), asc(matches.createdAt)),
+  ]);
+
+  const finished: FinishedMatch[] = finishedRows.map(({ match, state }) => {
+    const winner = (match.result?.winnerTeamId as string | undefined) ?? null;
+    const text = String(match.result?.text ?? '');
+    const cs = state as CricketState | null;
+    return {
+      teamAId: match.teamAId,
+      teamBId: match.teamBId,
+      winnerTeamId: winner,
+      outcome: winner ? 'win' : /tie/i.test(text) ? 'tie' : 'no_result',
+      stats: cs?.kind === 'cricket' ? (matchTeamStats(cs) ?? undefined) : undefined,
+    };
+  });
+
+  const points = meta?.points ?? DEFAULT_POINTS;
+  const tiebreak = meta?.tiebreak ?? 'NRR';
+  const names = new Map(teamRows.map((t) => [t.id, t]));
+  const standings: StandingRow[] = computeStandings(teamIds, finished, points, tiebreak).map((s) => ({
+    ...s,
+    name: names.get(s.teamId)?.name ?? meta?.teams.find((t) => t.id === s.teamId)?.name ?? '?',
+    short: names.get(s.teamId)?.shortName ?? null,
+  }));
+
+  const counts = Object.entries(cards.reduce<Record<string, number>>((m, c) => ((m[c.status] = (m[c.status] ?? 0) + 1), m), {})).map(([status, n]) => ({ status, n }));
+  const summary = summarise(row, counts);
+
+  // Seeds: current standings once matches are played, otherwise the order teams were entered.
+  const seeds = (summary.played > 0 ? standings.map((s) => s.name) : (meta?.teams ?? []).map((t) => names.get(t.id)?.name ?? t.name));
+  const qualify = meta?.qualify ?? 4;
+  const rounds =
+    summary.formatKey === 'ko' ? projectKnockout(seeds.length)
+    : summary.formatKey === 'league' ? []
+    : projectLeagueKnockout(qualify);
+
+  return {
+    ...summary,
+    meta,
+    standings,
+    matches: cards,
+    leaders: row.sportKey === 'cricket' ? await getCricketLeaders(5, id) : null,
+    bracket: rounds.length ? { rounds, seeds, projected: summary.played === 0 || summary.formatKey !== 'ko' } : null,
+    qualify,
+    tiebreak,
+    hasFixtures: cards.length > 0,
   };
 }

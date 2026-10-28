@@ -1,4 +1,5 @@
 'use client';
+import '@/styles/ratch-base.css';
 import { useEffect } from 'react';
 import type { MatchSnapshot } from '@sports/shared';
 import type { CricketState } from '@sports/sports-engine/src/cricket';
@@ -23,7 +24,7 @@ export function TvBoard({ initial, title }: { initial: MatchSnapshot; title: str
   }, []);
 
   return (
-    <div className="fixed inset-0 flex cursor-none flex-col bg-black p-12 text-fg">
+    <div className="ratch fixed inset-0 flex cursor-none flex-col p-12 text-fg">
       <header className="mb-8 flex items-center justify-between text-3xl text-muted">
         <span>{title}</span>
         <span className="flex items-center gap-4">

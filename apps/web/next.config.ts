@@ -9,6 +9,11 @@ loadEnvConfig(resolve(process.cwd(), '../..'), process.env.NODE_ENV !== 'product
 const config: NextConfig = {
   // Lets a second dev server run next to the main one without fighting over .next.
   distDir: process.env.NEXT_DIST_DIR ?? '.next',
+  // The scoring console moved out of /admin. A config redirect runs before the middleware and the admin
+  // layout, so scorers following an old link are not turned away on the way.
+  async redirects() {
+    return [{ source: '/admin/matches/:id/score', destination: '/score/:id', permanent: true }];
+  },
   transpilePackages: ['@sports/db', '@sports/scoring', '@sports/shared', '@sports/sports-engine'],
 };
 

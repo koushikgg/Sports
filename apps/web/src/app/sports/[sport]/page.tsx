@@ -23,12 +23,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SportHubPage({ params }: Props) {
   const { sport: key } = await params;
-  const [sports, { user, canScore }] = await Promise.all([getEnabledSports(), getShellUser()]);
+  const [sports, { user }] = await Promise.all([getEnabledSports(), getShellUser()]);
   const sport = sports.find((s) => s.key === key);
   if (!sport) notFound();
 
   const [matches, leaders] = await Promise.all([
-    listMatchCards({ sportKey: key, limit: 200 }),
+    listMatchCards({ sportKey: key, limit: 200, signedIn: !!user }),
     key === 'cricket' ? getCricketLeaders(5) : null,
   ]);
 
@@ -37,7 +37,7 @@ export default async function SportHubPage({ params }: Props) {
       <nav className="rx-crumbs" aria-label="Breadcrumb">
         <Link href="/matches">MATCHES</Link>/<Link href="/sports">SPORTS</Link>/<span aria-current="page">{sport.name.toUpperCase()}</span>
       </nav>
-      <SportHub sport={{ key: sport.key, name: sport.name }} matches={matches} leaders={leaders} canScore={canScore} />
+      <SportHub sport={{ key: sport.key, name: sport.name }} matches={matches} leaders={leaders} viewer={user} />
     </RatchShell>
   );
 }

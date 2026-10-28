@@ -374,3 +374,50 @@ describe('labels and last action', () => {
     expect(currentInnings(state)!.thisOver[0]).toEqual(chipFor({ ...p }));
   });
 });
+
+describe('free hit rule', () => {
+  const fhCtx: MatchContext = { ...ctx, config: { overs: 2, freeHit: true } };
+  const playFh = (events: SportEvent[], c = fhCtx) => {
+    const log: LoggedEvent[] = [];
+    for (const e of events) {
+      const d = decide(engine, c, log, e);
+      if (!d.ok) throw new Error(`rejected ${e.type}: ${d.error}`);
+      log.push({ seq: log.length + 1, ...d.value.event });
+    }
+    return { state: replay(engine, c, log) as CricketState, log, c };
+  };
+  const tryFh = (log: LoggedEvent[], e: SportEvent, c = fhCtx) => decide(engine, c, log, e);
+
+  it('a no-ball makes the next delivery a free hit, and a fair delivery uses it up', () => {
+    const afterNb = playFh([...setup, ball(0, { extra: 'nb' })]);
+    expect(afterNb.state.freeHit).toBe(true);
+    expect(playFh([...setup, ball(0, { extra: 'nb' }), ball(1)]).state.freeHit).toBe(false);
+  });
+
+  it('a wide on a free hit keeps the free hit; another no-ball gives another', () => {
+    expect(playFh([...setup, ball(0, { extra: 'nb' }), ball(0, { extra: 'wd' })]).state.freeHit).toBe(true);
+    expect(playFh([...setup, ball(0, { extra: 'nb' }), ball(0, { extra: 'nb' })]).state.freeHit).toBe(true);
+  });
+
+  it('only a run out can dismiss on a free hit', () => {
+    const { log } = playFh([...setup, ball(0, { extra: 'nb' })]);
+    const bowled = tryFh(log, ball(0, { wicket: { kind: 'bowled', playerId: 'a1' } }));
+    expect(bowled.ok).toBe(false);
+    expect(!bowled.ok && bowled.error).toMatch(/free hit/);
+    expect(tryFh(log, ball(0, { wicket: { kind: 'caught', playerId: 'a1' } })).ok).toBe(false);
+    expect(tryFh(log, ball(1, { wicket: { kind: 'run_out', playerId: 'a2' } })).ok).toBe(true);
+  });
+
+  it('the rule does nothing unless the match turned it on', () => {
+    const off: MatchContext = { ...ctx, config: { overs: 2 } };
+    const { state, log, c } = playFh([...setup, ball(0, { extra: 'nb' })], off);
+    expect(state.freeHit).toBe(false);
+    expect(tryFh(log, ball(0, { wicket: { kind: 'bowled', playerId: 'a1' } }), c).ok).toBe(true);
+  });
+
+  it('a new innings never starts on a free hit, and undo restores the free hit', () => {
+    const { log } = playFh([...setup, ball(0, { extra: 'nb' }), ball(1)]);
+    const undone = decide(engine, fhCtx, log, ev('undo'));
+    expect(undone.ok && (undone.value.state as CricketState).freeHit).toBe(true);
+  });
+});

@@ -242,17 +242,21 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
   // ---- sheet content/derived values
   const bowlSquad = inn ? squad(inn.bowlingTeamId) : [];
   const batSquad = inn ? squad(inn.battingTeamId) : [];
-  const kinds = KINDS[wk.delivery];
+  // On a free hit only a run out is possible; the engine enforces it, the sheet just does not offer the rest.
+  const kinds = s.freeHit ? KINDS[wk.delivery].filter((k) => k === 'run_out') : KINDS[wk.delivery];
   const wkKind = kinds.includes(wk.kind) ? wk.kind : kinds[0]!;
   const isRunOut = wkKind === 'run_out';
   const needsFielder = wkKind === 'caught' || wkKind === 'stumped' || isRunOut;
+  const keeperId = bowlSquad.find((p) => p.isKeeper)?.id ?? '';
+  // Stumped defaults to the keeper chosen for the match, until the scorer picks someone else.
+  const fielderId = wk.fielder || (wkKind === 'stumped' ? keeperId : '');
   const wkOut = (isRunOut ? slots[wk.who] : slots[0]) ?? slots[0] ?? '';
   const wkDesc = (() => {
     const b = surnameOf(names, inn?.bowler);
-    const f = surnameOf(names, wk.fielder);
+    const f = surnameOf(names, fielderId);
     switch (wkKind) {
       case 'bowled': return `b ${b}`;
-      case 'caught': return wk.fielder && wk.fielder === inn?.bowler ? `c & b ${b}` : `c ${f || '?'} b ${b}`;
+      case 'caught': return fielderId && fielderId === inn?.bowler ? `c & b ${b}` : `c ${f || '?'} b ${b}`;
       case 'lbw': return `lbw b ${b}`;
       case 'run_out': return f ? `run out (${f})` : 'run out';
       case 'stumped': return `st ${f || '?'} b ${b}`;
@@ -265,7 +269,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
   const wkPayload = {
     runs: isRunOut ? wk.runs : 0,
     ...(wk.delivery !== 'normal' ? { extra: wk.delivery as Extra } : {}),
-    wicket: { kind: wkKind, playerId: wkOut, ...(needsFielder && wk.fielder ? { fielderId: wk.fielder } : {}) },
+    wicket: { kind: wkKind, playerId: wkOut, ...(needsFielder && fielderId ? { fielderId } : {}) },
   };
 
   let preview: { chip: ChipData; text: string } | null = null;
@@ -339,7 +343,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
     <div className="ratch sc-root" data-theme="dark">
       <div className="sc-top">
         <div className="sc-brand">
-          <Link href={`/admin/matches/${snapshot.matchId}`} aria-label="Back to match" className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 16, marginRight: 4 }}>←</Link>
+          <Link href={`/sports/${snapshot.sportKey}/matches/${snapshot.matchId}`} aria-label="Back to match" className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 16, marginRight: 4 }}>←</Link>
           <span className="sc-brand-dot" />
           <span className="sc-brand-name">Sports Hub</span>
           <span className="sc-tag">SCORER</span>
@@ -455,7 +459,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
 
                 <div className="sc-card sc-over">
                   <div className="sc-row" style={{ flexWrap: 'nowrap' }}>
-                    <span className="lbl">THIS OVER · {overNo}</span>
+                    <span className="lbl">THIS OVER · {overNo}{s.freeHit && <span className="sc-freehit"> · FREE HIT</span>}</span>
                     <span className="lbl">{currentOverRuns(inn)} RUNS</span>
                   </div>
                   <div className="sc-over-chips">
@@ -620,8 +624,8 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
                   <Label>{wkKind === 'stumped' ? 'KEEPER' : wkKind === 'caught' ? 'CAUGHT BY' : 'FIELDER'}</Label>
                   <div className="sc-opts" data-wrap="true">
                     {bowlSquad.map((p) => (
-                      <Opt key={p.id} text selected={wk.fielder === p.id} onClick={() => setWk({ ...wk, fielder: wk.fielder === p.id ? '' : p.id })}>
-                        {surnameOf(names, p.id)}{p.id === inn?.bowler ? ' (bowler)' : ''}
+                      <Opt key={p.id} text selected={fielderId === p.id} onClick={() => setWk({ ...wk, fielder: fielderId === p.id ? '' : p.id })}>
+                        {surnameOf(names, p.id)}{p.id === inn?.bowler ? ' (bowler)' : ''}{p.isKeeper ? ' (wk)' : ''}
                       </Opt>
                     ))}
                   </div>

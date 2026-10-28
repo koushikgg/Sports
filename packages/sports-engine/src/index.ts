@@ -6,7 +6,7 @@ export interface MatchContext {
   matchId: string;
   teams: { id: string; name: string }[];
   /** Squad per team id (the team roster). */
-  players?: Record<string, { id: string; name: string }[]>;
+  players?: Record<string, { id: string; name: string; isCaptain?: boolean; isKeeper?: boolean }[]>;
   config: Record<string, unknown>;
 }
 

@@ -89,6 +89,10 @@ export interface CricketState {
   innings: Innings[];
   awaiting: Awaiting;
   result: CricketResult | null;
+  /** Match rules that change what the engine accepts. */
+  rules: { freeHit: boolean };
+  /** The next delivery is a free hit (the previous legal-or-not delivery was a no-ball). */
+  freeHit: boolean;
   /** The most recent event still in force, so the UI can say what Undo would remove. */
   lastAction: { type: string; label: string; playerId?: string } | null;
 }
@@ -184,6 +188,8 @@ function initialState(ctx: MatchContext): CricketState {
     innings: [],
     awaiting: 'toss',
     result: null,
+    rules: { freeHit: cfg.freeHit === true },
+    freeHit: false,
     lastAction: null,
   };
   return state;
@@ -243,6 +249,7 @@ function validate(s: CricketState, event: SportEvent): Result {
       if (s.awaiting !== 'ball' || !inn) return fail('Not ready for a ball');
       const { extra, nbKind, wicket } = p;
       if (nbKind && extra !== 'nb') return fail('nbKind only applies to a no-ball');
+      if (s.freeHit && wicket && wicket.kind !== 'run_out') return fail('Only a run out is possible on a free hit');
       if (wicket) {
         if (wicket.playerId !== inn.striker && wicket.playerId !== inn.nonStriker) {
           return fail('Dismissed player must be at the crease');
@@ -417,6 +424,12 @@ function applyBall(s: CricketState, inn: Innings, p: z.infer<typeof schemas.ball
   inn.striker = slotS;
   inn.nonStriker = slotN;
 
+  // --- free hit: a no-ball gives one to the next delivery; a wide leaves it standing; a fair delivery uses it up
+  if (s.rules.freeHit) {
+    if (extra === 'nb') s.freeHit = true;
+    else if (extra !== 'wd') s.freeHit = false;
+  }
+
   // --- innings end conditions
   const second = s.innings.length === 2;
   if (second && inn.runs > s.innings[0]!.runs) closeInnings(s, inn, 'target');
@@ -436,6 +449,7 @@ function apply(prev: CricketState, event: SportEvent): CricketState {
     case 'start_innings': {
       const p = schemas.start_innings.parse(event.payload);
       const batting = s.innings.length === 0 ? battingFirstId(s)! : otherTeam(s, inn!.battingTeamId);
+      s.freeHit = false;
       const stat = (id: string): BatterStat => ({ id, runs: 0, balls: 0, fours: 0, sixes: 0, out: null });
       s.innings.push({
         battingTeamId: batting,

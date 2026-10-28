@@ -37,10 +37,10 @@ export default async function MatchDetail({ params }: { params: Promise<{ id: st
         <StatusBadge status={m.status} />
       </PageHeader>
       <Card className="space-y-1 text-sm">
-        <div><span className="text-muted">Sport:</span> {m.sport}</div>
-        <div><span className="text-muted">Venue:</span> {m.venue ?? '—'}</div>
-        <div><span className="text-muted">When:</span> {m.scheduledAt?.toLocaleString() ?? 'TBD'}</div>
-        <div><span className="text-muted">Config:</span> {JSON.stringify(m.config)}</div>
+        <div><span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted">Sport </span> {m.sport}</div>
+        <div><span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted">Venue </span> {m.venue ?? '—'}</div>
+        <div><span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted">When </span> {m.scheduledAt?.toLocaleString() ?? 'TBD'}</div>
+        <div><span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted">Config </span> {JSON.stringify(m.config)}</div>
       </Card>
       <Card>
         <h2 className="mb-3 font-medium">Status</h2>
@@ -49,13 +49,13 @@ export default async function MatchDetail({ params }: { params: Promise<{ id: st
             <form key={s} action={setMatchStatus}>
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="status" value={s} />
-              <Button variant={s === m.status ? 'primary' : 'ghost'} className="capitalize">{s}</Button>
+              <Button variant={s === m.status ? 'primary' : 'ghost'}>{s}</Button>
             </form>
           ))}
         </div>
       </Card>
-      <Link href={`/admin/matches/${id}/score`} className="inline-block rounded-md bg-accent px-3 py-2 text-sm font-medium text-white">Open scorer console</Link>
-      <Link href={`/display/${id}`} target="_blank" className="ml-2 inline-block rounded-md border border-border px-3 py-2 text-sm">TV display ↗</Link>
+      <Link href={`/score/${id}`} className="inline-flex items-center rounded-full px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.06em] transition hover:brightness-110 bg-brand text-black">Open scorer console</Link>
+      <Link href={`/display/${id}`} target="_blank" className="inline-flex items-center rounded-full px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.06em] transition hover:brightness-110 ml-2 bg-surface-2 text-fg">TV display ↗</Link>
       <form action={deleteMatch}>
         <input type="hidden" name="id" value={id} />
         <Button variant="danger">Delete match</Button>

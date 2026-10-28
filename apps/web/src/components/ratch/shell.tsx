@@ -4,48 +4,45 @@ import '@fontsource-variable/jetbrains-mono';
 import '@/styles/ratch-base.css';
 import './shell.css';
 import Link from 'next/link';
+import { navFor, type Role } from '@sports/shared';
+import { signOut } from '@/auth';
+import { SignInButton } from './sign-in-button';
+import { Suspense } from 'react';
 
-/** Top-level destinations. Only some exist yet; the rest render as disabled until they are built. */
-const NAV = [
-  { key: 'matches', label: 'MATCHES', href: '/matches' },
-  { key: 'tournaments', label: 'TOURNAMENTS' },
-  { key: 'teams', label: 'TEAMS' },
-  { key: 'players', label: 'PLAYERS' },
-  { key: 'standings', label: 'STANDINGS' },
-] as const;
-
-export type NavKey = (typeof NAV)[number]['key'];
+export type ShellUser = { id: string; name: string; role: Role };
 
 const initials = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
 
+/**
+ * Top-level shell. The navigation is built from the viewer's role (see NAV_ITEMS in @sports/shared),
+ * so people only see links they can open. The middleware enforces the same rules.
+ */
 export function RatchShell({
   active,
   user,
   children,
 }: {
-  active: NavKey;
-  user: { name: string; role: 'admin' | 'scorer' } | null;
+  /** Key of the nav item to highlight (home, matches, tournaments...), or null on pages outside the nav. */
+  active: string | null;
+  user: ShellUser | null;
   children: React.ReactNode;
 }) {
+  const items = navFor(user?.role);
   return (
     <div className="ratch rx-page" data-theme="dark">
       <a href="#main" className="rx-skip">Skip to content</a>
       <header className="rx-nav">
-        <Link href="/matches" className="rx-brand">
+        <Link href="/" className="rx-brand">
           <span className="rx-brand-dot" />
           <span className="rx-brand-name">Sports Hub</span>
         </Link>
         <nav className="rx-links" aria-label="Main">
-          {NAV.map((n) =>
-            'href' in n ? (
-              <Link key={n.key} href={n.href} className="rx-link" data-active={n.key === active ? 'true' : undefined} aria-current={n.key === active ? 'page' : undefined}>
-                {n.label}
-              </Link>
-            ) : (
-              <span key={n.key} className="rx-link" aria-disabled="true" title="Coming soon">{n.label}</span>
-            ),
-          )}
+          {items.map((n) => (
+            <Link key={n.key} href={n.href} className="rx-link" data-active={n.key === active ? 'true' : undefined} data-key={n.key} aria-current={n.key === active ? 'page' : undefined}>
+              {n.label}
+            </Link>
+          ))}
         </nav>
         {user ? (
           <div className="rx-user">
@@ -55,9 +52,19 @@ export function RatchShell({
               <span className="rx-role" data-role={user.role}>{user.role.toUpperCase()}</span>
             )}
             <span className="rx-avatar" aria-label={user.name} title={user.name}>{initials(user.name)}</span>
+            <form
+              action={async () => {
+                'use server';
+                await signOut({ redirectTo: '/' });
+              }}
+            >
+              <button className="rx-signout" style={{ marginLeft: 0 }}>SIGN OUT</button>
+            </form>
           </div>
         ) : (
-          <Link href="/login" className="rx-link rx-signin">SIGN IN</Link>
+          <Suspense fallback={<Link href="/login" className="rx-login">LOGIN</Link>}>
+            <SignInButton />
+          </Suspense>
         )}
       </header>
       <main id="main" className="rx-main">{children}</main>

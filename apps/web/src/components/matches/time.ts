@@ -12,6 +12,13 @@ export function useNow(intervalMs = 30_000): Date | null {
   return now;
 }
 
+/** False on the server and during hydration, true afterwards. Gate locale-dependent text on it. */
+export function useHydrated(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  return ready;
+}
+
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const dayDiff = (a: Date, b: Date) => Math.round((startOfDay(a).getTime() - startOfDay(b).getTime()) / 86_400_000);
 

@@ -127,3 +127,21 @@ export function overSummaries(inn: Innings, totalOvers: number): OverSummary[] {
     };
   });
 }
+
+/**
+ * Per-team figures for net run rate from a finished two-innings match.
+ * A side that was bowled out is charged the full quota of overs, as the rules say.
+ */
+export function matchTeamStats(s: CricketState): Record<string, { runsFor: number; ballsFaced: number; runsAgainst: number; ballsBowled: number }> | null {
+  if (s.innings.length < 2) return null;
+  const quota = s.overs * BALLS_PER_OVER;
+  const out: Record<string, { runsFor: number; ballsFaced: number; runsAgainst: number; ballsBowled: number }> = {};
+  const get = (id: string) => (out[id] ??= { runsFor: 0, ballsFaced: 0, runsAgainst: 0, ballsBowled: 0 });
+  for (const inn of s.innings) {
+    const faced = inn.closeReason === 'all_out' ? quota : inn.legalBalls;
+    const bat = get(inn.battingTeamId), bowl = get(inn.bowlingTeamId);
+    bat.runsFor += inn.runs; bat.ballsFaced += faced;
+    bowl.runsAgainst += inn.runs; bowl.ballsBowled += faced;
+  }
+  return out;
+}

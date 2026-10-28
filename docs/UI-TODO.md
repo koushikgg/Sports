@@ -37,6 +37,28 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 - [ ] Scorer lock has no timeout; a scorer who leaves keeps the lock until released by them or an admin.
 - [ ] Wicket sheet has a Delivery row (normal / wide / no ball) that is not in the design, kept so wides and no-balls with wickets still work.
 
+## Fixtures (planned next, together)
+
+- [ ] **Fixture planning.** Publishing a tournament saves all its settings in `tournaments.meta` but creates no fixtures.
+  To plan: fixed fixtures (generated from the format) vs custom fixtures (organiser builds the list), rounds and groups,
+  knockout rounds whose teams are not known yet (needs matches with no teams, or created when a stage ends),
+  venue and time clashes, byes, and re-seeding when teams change.
+- [ ] Bracket tab is a projection from the standings; it becomes real once knockout fixtures exist.
+- [ ] Standings for **groups** format (two tables) and a way to advance qualifiers into knockout fixtures.
+- [ ] Match wizard rules saved but not enforced yet: wides and no balls re-bowled, super over, DLS. (Free hit and the
+  bowler over cap are enforced.)
+
+## Tournaments, create, login
+
+- [ ] **Follow** button on a tournament (needs followers and notifications). Not shown.
+- [ ] "Followers have been notified" copy from the Create design is not shown: nothing notifies anyone yet.
+- [ ] Editing a tournament or a match after it is created (rules, teams, XI until the toss).
+- [ ] Terms of use and privacy policy pages. The login page shows the sentence without links.
+- [ ] Members-only matches are hidden from lists and pages, but anyone who knows the match id can still join its live
+  socket room. Needs an auth check on joining.
+- [ ] Real Google round trip is untested until the real client id is added (see docs/AUTH.md).
+- [ ] The login brand card shows what is live, or next, from the database; the design's sample feed is not used.
+
 ## Engine and data
 
 - [ ] Foosball engine, scorer and live view (Phase 5).

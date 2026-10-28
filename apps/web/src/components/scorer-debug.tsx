@@ -48,7 +48,7 @@ export function ScorerDebug({ initial }: { initial: MatchSnapshot }) {
       </Card>
       <details className="text-xs text-muted">
         <summary>Raw state</summary>
-        <pre className="mt-2 overflow-auto rounded-md bg-surface-2 p-3">{JSON.stringify(snapshot.state, null, 2)}</pre>
+        <pre className="mt-2 overflow-auto rounded-lg bg-surface-2 p-3">{JSON.stringify(snapshot.state, null, 2)}</pre>
       </details>
     </div>
   );

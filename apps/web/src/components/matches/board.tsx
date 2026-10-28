@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import type { MatchSnapshot } from '@sports/shared';
+import { canScoreMatch, type MatchSnapshot } from '@sports/shared';
+import type { ShellUser } from '@/components/ratch/shell';
 import type { MatchCardData } from '@/lib/queries';
 import { useLiveRefresh } from '@/lib/use-live-refresh';
 import { Featured } from './featured';
@@ -14,13 +15,13 @@ const STATUS_TABS: [string, StatusFilter][] = [['ALL', 'all'], ['LIVE', 'live'],
 const ORDER: Record<StatusGroup, number> = { live: 0, up: 1, ft: 2 };
 
 export function MatchesBoard({
-  matches, sports, featured, featuredCompetition, canScore,
+  matches, sports, featured, featuredCompetition, viewer,
 }: {
   matches: MatchCardData[];
   sports: { key: string; name: string }[];
   featured: MatchSnapshot | null;
   featuredCompetition: string | null;
-  canScore: boolean;
+  viewer: ShellUser | null;
 }) {
   const now = useNow();
   const [sport, setSport] = useState('all');
@@ -78,7 +79,7 @@ export function MatchesBoard({
         </div>
       </div>
 
-      {showFeatured && <Featured key={featured.matchId} initial={featured} competition={featuredCompetition} canScore={canScore} />}
+      {showFeatured && <Featured key={featured.matchId} initial={featured} competition={featuredCompetition} canScore={canScoreMatch(viewer, matches.find((x) => x.id === featured.matchId) ?? { assignedScorerId: null, status: 'live' })} />}
 
       <div className="mx-filters">
         <div className="mx-filter-row">
@@ -120,7 +121,7 @@ export function MatchesBoard({
               <Link href={`/sports/${g.key}`} className="mx-viewall">VIEW ALL</Link>
             </div>
             <div className="mx-grid">
-              {g.items.map((m) => <MatchTile key={m.id} m={m} canScore={canScore} now={now} />)}
+              {g.items.map((m) => <MatchTile key={m.id} m={m} canScore={canScoreMatch(viewer, m)} now={now} />)}
             </div>
           </section>
         ))}

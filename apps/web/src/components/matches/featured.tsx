@@ -61,7 +61,7 @@ export function Featured({ initial, competition, canScore }: { initial: MatchSna
         </div>
         <div className="mx-feature-actions">
           <Link href={watch} className="mx-btn mx-btn-lg" data-variant="blue">WATCH LIVE</Link>
-          {canScore && <Link href={`/admin/matches/${snapshot.matchId}/score`} className="mx-btn mx-btn-lg" data-variant="amber">OPEN SCORER</Link>}
+          {canScore && <Link href={`/score/${snapshot.matchId}`} className="mx-btn mx-btn-lg" data-variant="amber">OPEN SCORER</Link>}
           <Link href={watch} className="mx-btn mx-btn-lg" data-variant="gray">SCORECARD</Link>
         </div>
       </div>
