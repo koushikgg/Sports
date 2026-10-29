@@ -14,6 +14,7 @@ const config: NextConfig = {
   async redirects() {
     return [
       { source: '/admin/matches/:id/score', destination: '/score/:id', permanent: true },
+      { source: '/admin/players', destination: '/players', permanent: false },
       { source: '/admin/teams', destination: '/teams', permanent: false },
       { source: '/admin/teams/:id', destination: '/teams/:id', permanent: false },
     ];

@@ -7,12 +7,10 @@ import Link from 'next/link';
 import { navFor, type Role } from '@sports/shared';
 import { signOut } from '@/auth';
 import { SignInButton } from './sign-in-button';
+import { UserMenu } from './user-menu';
 import { Suspense } from 'react';
 
 export type ShellUser = { id: string; name: string; role: Role; avatar?: string | null };
-
-const initials = (name: string) =>
-  name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
 
 /**
  * Top-level shell. The navigation is built from the viewer's role (see NAV_ITEMS in @sports/shared),
@@ -51,17 +49,15 @@ export function RatchShell({
             ) : (
               <span className="rx-role" data-role={user.role}>{user.role.toUpperCase()}</span>
             )}
-            <Link href="/profile" className="rx-avatar" aria-label="My profile" title={`${user.name} · my profile`}>
-              {user.avatar ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={user.avatar} alt="" /> : initials(user.name)}
-            </Link>
-            <form
-              action={async () => {
+            <UserMenu
+              name={user.name}
+              role={user.role}
+              avatar={user.avatar}
+              signOut={async () => {
                 'use server';
                 await signOut({ redirectTo: '/' });
               }}
-            >
-              <button className="rx-signout" style={{ marginLeft: 0 }}>SIGN OUT</button>
-            </form>
+            />
           </div>
         ) : (
           <Suspense fallback={<Link href="/login" className="rx-login">LOGIN</Link>}>

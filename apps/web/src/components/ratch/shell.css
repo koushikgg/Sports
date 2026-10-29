@@ -19,7 +19,17 @@ a.rx-role:hover { filter: brightness(1.2); }
 .rx-role[data-role='admin'] { background: color-mix(in srgb, #006cff 22%, transparent); color: #7fb2ff; }
 .rx-avatar { overflow: hidden; text-decoration: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-muted); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
 .rx-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.rx-avatar:hover { box-shadow: 0 0 0 2px var(--surface-muted), 0 0 0 4px var(--blue); }
+.rx-avatar:hover, .rx-avatar[aria-expanded='true'] { box-shadow: 0 0 0 2px var(--surface-muted), 0 0 0 4px var(--blue); }
+.rx-menu { position: relative; }
+.rx-menu .rx-avatar { border: none; padding: 0; cursor: pointer; }
+.rx-pop { position: absolute; right: 0; top: calc(100% + 10px); z-index: 60; min-width: 200px; padding: 6px; border-radius: 14px; background: #24262c; box-shadow: 0 16px 40px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 2px; }
+.rx-pop-who { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; border-bottom: 1px solid rgba(255,255,255,.06); margin-bottom: 4px; }
+.rx-pop-who b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.rx-pop form { display: contents; }
+.rx-pop-item { display: block; width: 100%; box-sizing: border-box; text-align: left; padding: 10px 12px; border-radius: 8px; background: transparent; color: var(--text-primary); font-family: var(--font-sans); font-size: 13px; font-weight: 500; text-decoration: none; }
+.rx-pop-item:hover { background: var(--surface-muted); }
+.rx-pop-item[data-danger] { color: var(--red-text); }
+.rx-pop-item[data-danger]:hover { background: color-mix(in srgb, #ff383c 14%, transparent); }
 .rx-signin { background: var(--surface-card); color: var(--text-primary); }
 
 .rx-main { width: 100%; max-width: 1320px; margin: 0 auto; box-sizing: border-box; padding: 28px 28px 72px; display: flex; flex-direction: column; gap: 28px; }

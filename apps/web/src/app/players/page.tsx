@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { asc, eq, getDb, players, sql, teamMembers, teams, users } from '@sports/db';
 import { avatarSrc } from '@/lib/avatar';
 import { RatchShell } from '@/components/ratch/shell';
@@ -23,7 +22,6 @@ export default async function PlayersPage() {
     <RatchShell active="players" user={user}>
       <div className="mx-head">
         <div><span className="lbl">DIRECTORY</span><h1>Players</h1></div>
-        {user?.role === 'admin' && <Link href="/admin/players" className="mx-btn mx-btn-lg" data-variant="gray">MANAGE PLAYERS</Link>}
       </div>
       <PlayersList rows={rows} />
     </RatchShell>

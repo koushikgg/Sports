@@ -24,6 +24,8 @@ export interface PlayerProfile {
   name: string;
   role: string | null;
   email: string | null;
+  employeeId: string | null;
+  hasAccount: boolean;
   avatar: string | null;
   teams: { id: string; name: string; isCaptain: boolean; isManager: boolean }[];
   matches: PlayerMatch[];
@@ -42,7 +44,7 @@ interface InningsRow {
 export async function getPlayerProfile(playerId: string): Promise<PlayerProfile | null> {
   const db = getDb();
   const [p] = await db
-    .select({ id: players.id, name: players.name, role: players.role, userId: players.userId, email: users.email, playerEmail: players.email, at: users.avatarUpdatedAt, has: sql<boolean>`${users.avatarUrl} is not null` })
+    .select({ id: players.id, name: players.name, role: players.role, employeeId: players.employeeId, userId: players.userId, email: users.email, playerEmail: players.email, at: users.avatarUpdatedAt, has: sql<boolean>`${users.avatarUrl} is not null` })
     .from(players)
     .leftJoin(users, eq(users.id, players.userId))
     .where(eq(players.id, playerId))
@@ -109,7 +111,7 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
     });
   }
 
-  return { id: p.id, name: p.name, role: p.role, email: p.email ?? p.playerEmail, avatar: p.has ? avatarSrc(p.userId, p.at ?? new Date(0)) : null, teams: teamList, matches: out };
+  return { id: p.id, name: p.name, role: p.role, email: p.email ?? p.playerEmail, employeeId: p.employeeId, hasAccount: !!p.userId, avatar: p.has ? avatarSrc(p.userId, p.at ?? new Date(0)) : null, teams: teamList, matches: out };
 }
 
 export interface Kpi { k: string; v: string | number; accent?: boolean }

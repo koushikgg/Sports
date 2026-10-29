@@ -2,7 +2,8 @@
 .pf { display: flex; flex-direction: column; gap: 24px; }
 .pf-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); text-decoration: none; }
 .pf-back:hover { color: #fff; }
-.pf-hero { border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 24px; background: radial-gradient(60% 160% at 100% 0%, color-mix(in srgb, #ffdb4d 14%, transparent), transparent 60%), var(--surface-card); }
+.pf-hero { position: relative; z-index: 6; border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 24px; background: radial-gradient(60% 160% at 100% 0%, color-mix(in srgb, #ffdb4d 14%, transparent), transparent 60%), var(--surface-card); }
+.pf-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
 .pf-id { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; min-width: 0; }
 .pf-id h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 44px; line-height: 1.05; letter-spacing: -.03em; overflow-wrap: anywhere; }
 .pf-who { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
