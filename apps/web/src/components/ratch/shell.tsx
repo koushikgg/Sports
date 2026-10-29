@@ -9,7 +9,7 @@ import { signOut } from '@/auth';
 import { SignInButton } from './sign-in-button';
 import { Suspense } from 'react';
 
-export type ShellUser = { id: string; name: string; role: Role };
+export type ShellUser = { id: string; name: string; role: Role; avatar?: string | null };
 
 const initials = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
@@ -51,7 +51,9 @@ export function RatchShell({
             ) : (
               <span className="rx-role" data-role={user.role}>{user.role.toUpperCase()}</span>
             )}
-            <span className="rx-avatar" aria-label={user.name} title={user.name}>{initials(user.name)}</span>
+            <Link href="/profile" className="rx-avatar" aria-label="My profile" title={`${user.name} · my profile`}>
+              {user.avatar ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={user.avatar} alt="" /> : initials(user.name)}
+            </Link>
             <form
               action={async () => {
                 'use server';

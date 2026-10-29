@@ -36,6 +36,9 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: roleEnum('role').notNull().default('scorer'),
+  /** Profile photo as a small data URL (the profile page crops it to 256px). */
+  avatarUrl: text('avatar_url'),
+  avatarUpdatedAt: timestamp('avatar_updated_at', { withTimezone: true }),
   createdAt: createdAt(),
 });
 
@@ -59,7 +62,9 @@ export const teams = pgTable('teams', {
   sportId: uuid('sport_id').notNull().references(() => sports.id),
   name: text('name').notNull(),
   shortName: text('short_name'),
+  /** Team logo as a small data URL (cropped to a square in the browser). */
   logoUrl: text('logo_url'),
+  logoUpdatedAt: timestamp('logo_updated_at', { withTimezone: true }),
   createdAt: createdAt(),
 });
 

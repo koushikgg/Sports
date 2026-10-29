@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Avatar } from '@/components/ratch/avatar';
 
-export interface PlayerRow { id: string; name: string; role: string | null; teams: string[] }
+export interface PlayerRow { id: string; name: string; role: string | null; teams: string[]; avatar?: string | null }
 
 export function PlayersList({ rows }: { rows: PlayerRow[] }) {
   const [q, setQ] = useState('');
@@ -17,12 +18,12 @@ export function PlayersList({ rows }: { rows: PlayerRow[] }) {
       {shown.length === 0 ? <p className="tn-empty">{rows.length ? 'No players match your search.' : 'No players yet.'}</p> : (
         <div className="dr-list">
           {shown.map((p) => (
-            <div key={p.id} className="dr-row">
-              <Avatar name={p.name} size={32} />
+            <Link key={p.id} href={`/players/${p.id}`} className="dr-row" style={{ color: 'inherit', textDecoration: 'none' }}>
+              <Avatar name={p.name} size={32} src={p.avatar} />
               <b>{p.name}</b>
               <small>{p.teams.length ? p.teams.join(' · ') : 'No team'}</small>
               {p.role && <span className="dr-role">{p.role}</span>}
-            </div>
+            </Link>
           ))}
         </div>
       )}

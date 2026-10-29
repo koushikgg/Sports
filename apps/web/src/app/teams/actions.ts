@@ -110,6 +110,23 @@ export async function clearCaptain(formData: FormData) {
   refresh(teamId);
 }
 
+/** Admin only. `logo` is 'remove' or a cropped image data URL from the browser. */
+export async function setTeamLogo(formData: FormData): Promise<{ error?: string }> {
+  const admin = await requireRole('admin');
+  const teamId = uuid.parse(formData.get('teamId'));
+  const parsed = z
+    .string()
+    .max(300_000, 'That image is too large.')
+    .regex(/^(remove|data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+)$/, 'Use a PNG, JPEG or WebP image.')
+    .safeParse(formData.get('logo'));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the image.' };
+  const remove = parsed.data === 'remove';
+  await getDb().update(teams).set(remove ? { logoUrl: null, logoUpdatedAt: null } : { logoUrl: parsed.data, logoUpdatedAt: new Date() }).where(eq(teams.id, teamId));
+  await audit(admin.id, remove ? 'remove_logo' : 'set_logo', 'team', teamId);
+  refresh(teamId);
+  return {};
+}
+
 /** Admin only. */
 export async function renameTeam(formData: FormData) {
   const admin = await requireRole('admin');

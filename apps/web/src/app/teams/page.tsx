@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { asc, count, eq, getDb, sports, teamMembers, teams } from '@sports/db';
 import { Button, Input, Label, Select } from '@/components/ui';
 import { createTeam } from './actions';
+import { teamLogoSrc } from '@/lib/avatar';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { RatchShell } from '@/components/ratch/shell';
 import '@/components/tournaments/tournaments.css';
@@ -15,7 +16,7 @@ export default async function TeamsPage() {
   const { user } = await getShellUser();
   const db = getDb();
   const [rows, sizes, sportRows] = await Promise.all([
-    db.select({ id: teams.id, name: teams.name, shortName: teams.shortName, sport: sports.name, sportKey: sports.key }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).orderBy(asc(sports.name), asc(teams.name)),
+    db.select({ id: teams.id, name: teams.name, shortName: teams.shortName, sport: sports.name, sportKey: sports.key, logoAt: teams.logoUpdatedAt }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).orderBy(asc(sports.name), asc(teams.name)),
     db.select({ teamId: teamMembers.teamId, n: count() }).from(teamMembers).groupBy(teamMembers.teamId),
     user?.role === 'admin' ? db.select().from(sports).orderBy(asc(sports.name)) : Promise.resolve([]),
   ]);
@@ -45,7 +46,10 @@ export default async function TeamsPage() {
             const tint = teamTint(t.name);
             const body = (
               <>
-                <span className="cw-code" style={{ width: 44, height: 44, background: tint.bg, color: tint.fg, fontSize: 12 }}>{teamCode(t.name, t.shortName)}</span>
+                {t.logoAt
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={teamLogoSrc(t.id, t.logoAt)!} alt="" className="cw-code" style={{ width: 44, height: 44, objectFit: 'cover' }} />
+                  : <span className="cw-code" style={{ width: 44, height: 44, background: tint.bg, color: tint.fg, fontSize: 12 }}>{teamCode(t.name, t.shortName)}</span>}
                 <span><b>{t.name}</b><small><i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 3, background: sportColor(t.sportKey), marginRight: 6 }} />{t.sport} · {size.get(t.id) ?? 0} players</small></span>
               </>
             );

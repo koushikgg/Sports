@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { asc, eq, getDb, players, sports, teamManagers, teamMembers, teams, users } from '@sports/db';
+import { asc, eq, getDb, players, sports, sql, teamManagers, teamMembers, teams, users } from '@sports/db';
+import { avatarSrc, teamLogoSrc } from '@/lib/avatar';
 import { RatchShell } from '@/components/ratch/shell';
 import { TeamManage } from '@/components/teams/team-manage';
 import { canManageTeam } from '@/lib/team-access';
@@ -14,14 +15,14 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const { user } = await getShellUser();
   const db = getDb();
   const [row] = /^[0-9a-f-]{36}$/i.test(id)
-    ? await db.select({ id: teams.id, name: teams.name, shortName: teams.shortName, sport: sports.name }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).where(eq(teams.id, id)).limit(1)
+    ? await db.select({ id: teams.id, name: teams.name, shortName: teams.shortName, sport: sports.name, logoAt: teams.logoUpdatedAt }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).where(eq(teams.id, id)).limit(1)
     : [];
   if (!row) notFound();
 
   const [canManage, roster, managers] = await Promise.all([
     canManageTeam(user, id),
     db
-      .select({ id: players.id, name: players.name, userId: players.userId, email: users.email, playerEmail: players.email, isCaptain: teamMembers.isCaptain })
+      .select({ id: players.id, name: players.name, userId: players.userId, email: users.email, playerEmail: players.email, isCaptain: teamMembers.isCaptain, at: users.avatarUpdatedAt, has: sql<boolean>`${users.avatarUrl} is not null` })
       .from(teamMembers)
       .innerJoin(players, eq(players.id, teamMembers.playerId))
       .leftJoin(users, eq(users.id, players.userId))
@@ -38,8 +39,8 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   return (
     <RatchShell active="teams" user={user}>
       <TeamManage
-        team={row}
-        roster={roster.map((r) => ({ id: r.id, name: r.name, userId: r.userId, isCaptain: r.isCaptain, email: r.email ?? r.playerEmail }))}
+        team={{ id: row.id, name: row.name, shortName: row.shortName, sport: row.sport, logo: teamLogoSrc(row.id, row.logoAt) }}
+        roster={roster.map((r) => ({ id: r.id, name: r.name, userId: r.userId, isCaptain: r.isCaptain, email: r.email ?? r.playerEmail, avatar: r.has ? avatarSrc(r.userId, r.at ?? new Date(0)) : null }))}
         managers={managers}
         canManage={canManage}
         isAdmin={user?.role === 'admin'}

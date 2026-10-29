@@ -22,6 +22,20 @@
       "when": 1793272207957,
       "tag": "0002_round_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793274858211,
+      "tag": "0003_serious_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793275341291,
+      "tag": "0004_sleepy_marten_broadcloak",
+      "breakpoints": true
     }
   ]
 }

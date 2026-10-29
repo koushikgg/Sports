@@ -17,7 +17,9 @@ a.rx-link:hover { background: var(--surface-card); color: #fff; }
 .rx-role { text-decoration: none; }
 a.rx-role:hover { filter: brightness(1.2); }
 .rx-role[data-role='admin'] { background: color-mix(in srgb, #006cff 22%, transparent); color: #7fb2ff; }
-.rx-avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-muted); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+.rx-avatar { overflow: hidden; text-decoration: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-muted); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+.rx-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.rx-avatar:hover { box-shadow: 0 0 0 2px var(--surface-muted), 0 0 0 4px var(--blue); }
 .rx-signin { background: var(--surface-card); color: var(--text-primary); }
 
 .rx-main { width: 100%; max-width: 1320px; margin: 0 auto; box-sizing: border-box; padding: 28px 28px 72px; display: flex; flex-direction: column; gap: 28px; }

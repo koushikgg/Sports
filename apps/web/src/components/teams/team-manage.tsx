@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  addManager, addPlayerToTeam, addUserAsPlayer, clearCaptain, deleteTeam, makeCaptain, removeFromTeam, removeManager, renameTeam,
+  addManager, addPlayerToTeam, addUserAsPlayer, clearCaptain, deleteTeam, makeCaptain, removeFromTeam, removeManager, renameTeam, setTeamLogo,
 } from '@/app/teams/actions';
 import type { PersonHit } from '@/app/api/teams/[id]/people-search/route';
 import { teamCode, teamTint } from '@/components/matches/model';
@@ -13,14 +13,27 @@ import './team-manage.css';
 const Dots = ({ size }: { size: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="12" cy="5" r="2.2" /><circle cx="12" cy="12" r="2.2" /><circle cx="12" cy="19" r="2.2" /></svg>
 );
+/** Centre-crops to a square and shrinks until the data URL is small. Keeps transparency (WebP, else PNG). */
+async function cropLogo(file: File): Promise<string> {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(bmp.width, bmp.height);
+  for (const size of [256, 192, 128]) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    c.getContext('2d')!.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, size, size);
+    const url = c.toDataURL('image/webp', 0.9);
+    if (url.length <= 200_000) return url;
+  }
+  throw new Error('too large');
+}
 const Lens = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
 );
 
-export interface RosterRow { id: string; name: string; email: string | null; userId: string | null; isCaptain: boolean }
+export interface RosterRow { id: string; name: string; email: string | null; userId: string | null; isCaptain: boolean; avatar?: string | null }
 export interface ManagerRow { id: string; name: string; email: string }
 interface Props {
-  team: { id: string; name: string; shortName: string | null; sport: string };
+  team: { id: string; name: string; shortName: string | null; sport: string; logo: string | null };
   roster: RosterRow[];
   managers: ManagerRow[];
   /** Admin, manager or captain: may add and remove players. */
@@ -85,7 +98,15 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
   const [problem, setProblem] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const logoInput = useRef<HTMLInputElement>(null);
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  useEffect(() => {
+    if (!menu) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [menu]);
 
   const say = (t: string) => { clearTimeout(timer.current); setToast(t); timer.current = setTimeout(() => setToast(null), 2200); };
   const run = (job: () => Promise<unknown>, done: string, after?: () => void) =>
@@ -125,6 +146,14 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
     }
     if (c?.kind === 'manager') return run(() => removeManager(fd({ ...T, userId: c.row.id })), `${c.row.name} removed as manager`);
   };
+  const pickLogo = async (f: File | undefined) => {
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return setProblem('Choose an image file.');
+    if (f.size > 12 * 1024 * 1024) return setProblem('That image is over 12 MB.');
+    let logo: string;
+    try { logo = await cropLogo(f); } catch { return setProblem('That image could not be used. Try a smaller one.'); }
+    run(() => setTeamLogo(fd({ ...T, logo })), 'Team photo updated');
+  };
   const saveName = () => {
     const n = draft.trim(); if (!n) return;
     setRenaming(false);
@@ -160,7 +189,12 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
       <section className="tm-hero">
         <div className="tm-top">
           <div className="tm-id">
-            <div className="tm-crest" style={{ background: tint.bg, color: tint.fg }}>{teamCode(team.name, team.shortName)}</div>
+            {team.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={team.logo} alt="" className="tm-crest" style={{ objectFit: 'cover' }} />
+            ) : (
+              <div className="tm-crest" style={{ background: tint.bg, color: tint.fg }}>{teamCode(team.name, team.shortName)}</div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
               <span className="lbl">{team.sport.toUpperCase()}</span>
               <h1>{team.name}</h1>
@@ -169,6 +203,8 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
           {isAdmin && (
             <Menu id="team" hero>
               <Item onClick={() => { setDraft(team.name); setRenaming(true); }}>Edit team name</Item>
+              <Item onClick={() => logoInput.current?.click()}>{team.logo ? 'Change team photo' : 'Add team photo'}</Item>
+              {team.logo && <Item onClick={() => run(() => setTeamLogo(fd({ ...T, logo: 'remove' })), 'Team photo removed')}>Remove team photo</Item>}
               <Item danger onClick={() => setConfirm('delete')}>Delete team</Item>
             </Menu>
           )}
@@ -193,9 +229,9 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
           <div className="tm-list">
             {roster.map((p, i) => (
               <div key={p.id} className="tm-row" data-cap={p.isCaptain ? '' : undefined} style={{ borderRadius: stack(i, roster.length) }}>
-                <Avatar name={p.name} size={40} />
+                <Avatar name={p.name} size={40} src={p.avatar} />
                 <span className="tm-who">
-                  <span><b>{p.name}</b>{p.isCaptain && <span className="tm-cap">CAPTAIN</span>}</span>
+                  <span><Link href={`/players/${p.id}`} style={{ color: 'inherit', textDecoration: 'none' }}><b>{p.name}</b></Link>{p.isCaptain && <span className="tm-cap">CAPTAIN</span>}</span>
                   {p.email && <small>{p.email.toUpperCase()}</small>}
                 </span>
                 {canManage && (
@@ -216,7 +252,6 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
               </div>
             ))}
           </div>
-          <span className="tm-note">The captain can add and remove this team’s people. Only players linked to a user account can be captain.</span>
         </section>
 
         {(isAdmin || managers.length > 0) && (
@@ -251,6 +286,8 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
           </div>
         </div>
       )}
+
+      <input ref={logoInput} type="file" accept="image/*" hidden aria-label="Team photo" onChange={(e) => { void pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
 
       {menu && <div className="tm-scrim" onClick={() => setMenu(null)} />}
 

@@ -17,6 +17,7 @@ export const ROUTE_RULES: { pattern: RegExp; allow: Viewer[] }[] = [
   { pattern: /^\/admin(\/|$)/, allow: ADMINS },
   { pattern: /^\/create(\/|$)/, allow: ADMINS },
   { pattern: /^\/score(\/|$)/, allow: MEMBERS },
+  { pattern: /^\/profile(\/|$)/, allow: MEMBERS },
   { pattern: /^\/teams(\/|$)/, allow: MEMBERS },
   { pattern: /^\/players(\/|$)/, allow: MEMBERS },
 ];

@@ -3,9 +3,13 @@ import { teamTint } from '@/components/matches/model';
 const initials = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
 
-/** Round initials badge, tinted from the name so a person always looks the same. */
-export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+/** Round badge: the person's photo when they have one, otherwise initials tinted from the name. */
+export function Avatar({ name, size = 32, src }: { name: string; size?: number; src?: string | null }) {
   const t = teamTint(name);
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt="" aria-hidden className="rx-ava" style={{ width: size, height: size, objectFit: 'cover' }} />;
+  }
   return (
     <span
       aria-hidden

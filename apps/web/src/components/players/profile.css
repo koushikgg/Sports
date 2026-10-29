@@ -1,0 +1,62 @@
+/* Player profile, from Player Profile.dc.html (Claude Design). Tokens come from .ratch in ratch-base.css. */
+.pf { display: flex; flex-direction: column; gap: 24px; }
+.pf-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); text-decoration: none; }
+.pf-back:hover { color: #fff; }
+.pf-hero { border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 24px; background: radial-gradient(60% 160% at 100% 0%, color-mix(in srgb, #ffdb4d 14%, transparent), transparent 60%), var(--surface-card); }
+.pf-id { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; min-width: 0; }
+.pf-id h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 44px; line-height: 1.05; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.pf-who { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pf-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-chip { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 6px 10px; border-radius: 999px; background: var(--surface-muted); color: var(--text-primary); text-decoration: none; }
+a.pf-chip:hover { filter: brightness(1.2); }
+.pf-chip[data-k="cap"] { background: var(--amber); color: #0d0e11; }
+.pf-chip[data-k="mgr"] { background: var(--blue-soft); color: #7fb2ff; }
+.pf-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-tab { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 999px; background: rgba(13,14,17,.55); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-decoration: none; }
+.pf-tab[data-on] { background: #f4f5f7; color: #0d0e11; }
+.pf-tab i { width: 8px; height: 8px; border-radius: 3px; background: var(--amber); }
+.pf-tab span { opacity: .6; }
+.pf-group { display: flex; flex-direction: column; gap: 8px; }
+.pf-group > b { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); padding: 0 4px; }
+.pf-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.pf-kpi { padding: 14px 16px; border-radius: 16px; background: rgba(13,14,17,.55); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pf-kpi span:first-child { font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); }
+.pf-kpi span:last-child { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.pf-kpi[data-accent] span:last-child { color: var(--amber); }
+.pf-list { display: flex; flex-direction: column; gap: 4px; }
+.pf-title { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--text-secondary); padding: 0 4px 6px; }
+.pf-row { display: grid; grid-template-columns: 28px 76px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 14px 16px; background: var(--surface-card); color: inherit; text-decoration: none; transition: background 160ms; }
+.pf-row:hover { background: var(--surface-muted); }
+.pf-res { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; font-weight: 700; background: var(--surface-muted); color: var(--text-secondary); }
+.pf-res[data-r="W"] { background: color-mix(in srgb, #34c759 25%, transparent); color: #6fe08d; }
+.pf-res[data-r="L"] { background: color-mix(in srgb, #ff383c 22%, transparent); color: var(--red-text); }
+.pf-date { font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em; color: var(--text-tertiary); }
+.pf-vs { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-vs b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-vs small { font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em; color: var(--text-tertiary); }
+.pf-score { font-family: var(--font-mono); font-size: 12px; padding: 6px 12px; border-radius: 999px; background: var(--surface-muted); white-space: nowrap; }
+.pf-row:hover .pf-score { background: var(--surface-card); }
+.pf-line { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-family: var(--font-mono); font-size: 13px; font-weight: 700; min-width: 96px; text-align: right; }
+.pf-line small { font-size: 10px; font-weight: 600; color: var(--text-secondary); letter-spacing: .02em; }
+.pf-empty { padding: 40px; border-radius: 20px; background: var(--surface-card); text-align: center; font-size: 14px; color: var(--text-secondary); }
+/* profile editor */
+.pf-edit { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; width: 100%; }
+.pf-photo { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pf-photo .rx-ava { box-shadow: 0 0 0 3px var(--surface-muted); }
+.pf-link { background: transparent; color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 6px 8px; border-radius: 8px; }
+.pf-link:hover { color: #fff; background: var(--surface-muted); }
+.pf-form { flex: 1 1 320px; max-width: 520px; display: flex; flex-direction: column; gap: 14px; }
+.pf-field { display: flex; flex-direction: column; gap: 6px; }
+.pf-field input { height: 44px; padding: 0 14px; border: none; outline: none; border-radius: 8px; background: var(--surface-muted); color: var(--text-primary); font: inherit; font-size: 15px; }
+.pf-field input:read-only { color: var(--text-tertiary); }
+.pf-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pf-save { height: 40px; padding: 0 22px; border-radius: 999px; background: var(--amber); color: #0d0e11; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.pf-save:disabled { opacity: .4; }
+.pf-msg { font-size: 13px; color: var(--text-secondary); }
+.pf-msg[data-bad] { color: var(--red-text); }
+@media (max-width: 720px) {
+  .pf-hero { padding: 20px; }
+  .pf-id h1 { font-size: 32px; }
+  .pf-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; }
+  .pf-date, .pf-score { display: none; }
+}
