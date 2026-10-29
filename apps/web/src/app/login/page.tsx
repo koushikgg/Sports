@@ -71,7 +71,7 @@ export default async function LoginPage({
   return (
     <div className="ratch lg-page" data-theme="dark">
       <section className="lg-brand" aria-label="About">
-        <Link href="/" className="lg-logo"><i /><b>Sports Hub</b></Link>
+        <Link href="/" className="lg-logo"><i /><b>Ratchet</b></Link>
         <div className="lg-pitch">
           <h1>Every ball, every goal, <span>scored live</span>.</h1>
           <p>Run your league, score matches from the boundary and share a live view with everyone watching.</p>

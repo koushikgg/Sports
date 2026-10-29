@@ -14,7 +14,7 @@ import { getShellUser } from '@/lib/shell-user';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: { absolute: 'Sports Hub — every match, live' },
+  title: { absolute: 'Ratchet — every match, live' },
   description: 'Live scores, fixtures, standings and results for every game played around the office.',
 };
 

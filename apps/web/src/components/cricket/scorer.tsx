@@ -345,7 +345,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
         <div className="sc-brand">
           <Link href={`/sports/${snapshot.sportKey}/matches/${snapshot.matchId}`} aria-label="Back to match" className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 16, marginRight: 4 }}>←</Link>
           <span className="sc-brand-dot" />
-          <span className="sc-brand-name">Sports Hub</span>
+          <span className="sc-brand-name">Ratchet</span>
           <span className="sc-tag">SCORER</span>
         </div>
         <Link href="/matches" className="sc-allmatches">ALL MATCHES</Link>

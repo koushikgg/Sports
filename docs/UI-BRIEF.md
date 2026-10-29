@@ -1,4 +1,4 @@
-# Sports Hub — UI brief (for Claude Design)
+# Ratchet — UI brief (for Claude Design)
 
 Paste this whole file into Claude Design, and attach the CricHeroes screenshot
 (`~/Pictures/Screenshots/Screenshot from 2026-10-28 11-30-36.png`) as the scoring-screen reference.

@@ -7,9 +7,9 @@ import { SITE_URL } from '@/lib/queries';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: 'Sports Hub — every match, live', template: '%s · Sports Hub' },
+  title: { default: 'Ratchet — every match, live', template: '%s · Ratchet' },
   description: 'Live scores, fixtures and results for company sports.',
-  openGraph: { siteName: 'Sports Hub', type: 'website' },
+  openGraph: { siteName: 'Ratchet', type: 'website' },
 };
 
 export const viewport: Viewport = { themeColor: '#0d0e11', colorScheme: 'dark' };

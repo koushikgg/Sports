@@ -35,7 +35,7 @@ export function RatchShell({
       <header className="rx-nav">
         <Link href="/" className="rx-brand">
           <span className="rx-brand-dot" />
-          <span className="rx-brand-name">Sports Hub</span>
+          <span className="rx-brand-name">Ratchet</span>
         </Link>
         <nav className="rx-links" aria-label="Main">
           {items.map((n) => (
