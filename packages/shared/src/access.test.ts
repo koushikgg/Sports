@@ -14,6 +14,10 @@ describe('accessFor', () => {
   it('guests are sent to sign in for protected pages; wrong roles are forbidden', () => {
     expect(accessFor(null, '/admin')).toBe('login');
     expect(accessFor(null, '/create')).toBe('login');
+    expect(accessFor(null, '/tournaments/abc/create')).toBe('login');
+    expect(accessFor('scorer', '/tournaments/abc/create')).toBe('forbidden');
+    expect(accessFor('admin', '/tournaments/abc/create')).toBe('ok');
+    expect(accessFor(null, '/tournaments/abc')).toBe('ok');
     expect(accessFor(null, '/teams')).toBe('login');
     expect(accessFor('scorer', '/admin')).toBe('forbidden');
     expect(accessFor('scorer', '/admin/teams')).toBe('forbidden');

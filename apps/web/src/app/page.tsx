@@ -94,7 +94,7 @@ export default async function Showcase() {
           <div className="sx-section-head"><h2 id="tour-h">Tournaments</h2><span style={{ flex: 1 }} /><Link href="/tournaments" className="mx-viewall">ALL TOURNAMENTS</Link></div>
           <div className="tn-grid">
             {ongoing.map((t) => (
-              <Link key={t.id} href={`/tournaments?t=${t.id}`} className="tn-card" style={{ ['--tn' as string]: sportColor(t.sportKey) }}>
+              <Link key={t.id} href={`/tournaments/${t.id}`} className="tn-card" style={{ ['--tn' as string]: sportColor(t.sportKey) }}>
                 <div className="cw-row-between"><span className="lbl">{t.sportName.toUpperCase()}</span><span className="mx-badge" data-tone={t.status === 'live' ? 'live' : 'up'}><i />{t.status === 'live' ? 'ONGOING' : 'UPCOMING'}</span></div>
                 <div><b className="tn-name">{t.name}</b><small>{t.formatLabel} · {t.teamCount} teams</small></div>
               </Link>

@@ -19,6 +19,8 @@ type Lineup = { playerIds: string[]; captainId: string | null; keeperId: string 
 interface Props {
   initialMode: Mode;
   initialTournamentId: string | null;
+  /** Set on a tournament's own create page: the match belongs to it, so the mode switch and the picker are hidden. */
+  lockedTournament?: { id: string; name: string };
   currentUserId: string | null;
   sports: Sport[];
   teams: Team[];
@@ -397,8 +399,10 @@ export function Wizard(props: Props) {
     // ---- match mode
     if (!isT && step === 0) return (
       <>
-        <div className="cw-block"><Label>PART OF</Label>
-          <Pills value={m.tournamentId ?? 'friendly'} onPick={(v) => chooseTournament(v === 'friendly' ? null : String(v))} options={[{ v: 'friendly', l: 'Friendly' }, ...cricketTournaments.map((x) => ({ v: x.id, l: x.name }))]} /></div>
+        {!props.lockedTournament && (
+          <div className="cw-block"><Label>PART OF</Label>
+            <Pills value={m.tournamentId ?? 'friendly'} onPick={(v) => chooseTournament(v === 'friendly' ? null : String(v))} options={[{ v: 'friendly', l: 'Friendly' }, ...cricketTournaments.map((x) => ({ v: x.id, l: x.name }))]} /></div>
+        )}
         <div className="cw-two">
           {([['HOME · BATS FIRST IF TOSS IS SKIPPED', 'a'], ['AWAY', 'b']] as const).map(([label, side]) => {
             const chosen = side === 'a' ? m.teamAId : m.teamBId, other = side === 'a' ? m.teamBId : m.teamAId;
@@ -537,14 +541,14 @@ export function Wizard(props: Props) {
     <>
       <div className="mx-head">
         <div>
-          <span className="lbl">ORGANISER · CREATE</span>
+          <span className="lbl">{props.lockedTournament ? props.lockedTournament.name.toUpperCase() : 'ORGANISER · CREATE'}</span>
           <h1>{isT ? 'New tournament' : 'New cricket match'}</h1>
         </div>
-        <div className="cw-modes" role="group" aria-label="What to create">
+        {!props.lockedTournament && <div className="cw-modes" role="group" aria-label="What to create">
           {([['TOURNAMENT', 'tournament'], ['CRICKET MATCH', 'match']] as const).map(([l, v]) => (
             <button key={v} type="button" aria-pressed={mode === v} data-on={mode === v ? 'true' : undefined} onClick={() => switchMode(v)}>{l}</button>
           ))}
-        </div>
+        </div>}
       </div>
 
       <div className="cw-layout">
@@ -574,7 +578,7 @@ export function Wizard(props: Props) {
                   {serverError ?? (err || (last ? 'Everything looks ready.' : overrun && step === 3 ? `Schedule runs past ${fmtD(t.end)}. Add matches per day or extend the end date.` : ''))}
                 </span>
                 <div className="cw-nav">
-                  <Link href={isT ? '/tournaments' : '/matches'} className="cw-btn" data-variant="gray" aria-label="Cancel and leave without saving">CANCEL</Link>
+                  <Link href={props.lockedTournament ? `/tournaments/${props.lockedTournament.id}` : isT ? '/tournaments' : '/matches'} className="cw-btn" data-variant="gray" aria-label="Cancel and leave without saving">CANCEL</Link>
                   {step > 0 && <button type="button" className="cw-btn" data-variant="gray" onClick={() => go(step - 1)}>BACK</button>}
                   <button type="button" className="cw-btn" data-variant={err ? 'off' : last ? 'amber' : 'blue'} disabled={!!err || submitting} onClick={last ? submit : () => go(step + 1)}>
                     {submitting ? 'SAVING…' : last ? (isT ? 'PUBLISH TOURNAMENT' : 'CREATE MATCH') : 'CONTINUE'}
@@ -594,13 +598,14 @@ export function Wizard(props: Props) {
               <div className="cw-done-actions">
                 {done.kind === 'tournament' ? (
                   <>
-                    <Link href={`/tournaments?t=${done.id}`} className="cw-btn" data-variant="blue">VIEW TOURNAMENT</Link>
-                    <button type="button" className="cw-btn" data-variant="gray" onClick={() => { chooseTournament(done.id); setDone(null); setMode('match'); setStep(0); setVisited(0); }}>CREATE A MATCH</button>
+                    <Link href={`/tournaments/${done.id}`} className="cw-btn" data-variant="blue">VIEW TOURNAMENT</Link>
+                    <Link href={`/tournaments/${done.id}/create`} className="cw-btn" data-variant="gray">CREATE A MATCH</Link>
                   </>
                 ) : (
                   <>
                     <Link href={`/sports/cricket/matches/${done.id}`} className="cw-btn" data-variant="blue">VIEW MATCH</Link>
                     <Link href={`/score/${done.id}`} className="cw-btn" data-variant="amber">OPEN SCORER</Link>
+                    {props.lockedTournament && <Link href={`/tournaments/${props.lockedTournament.id}`} className="cw-btn" data-variant="gray">BACK TO TOURNAMENT</Link>}
                     <button type="button" className="cw-btn" data-variant="gray" onClick={() => { setDone(null); setStep(0); setVisited(0); setM((x) => ({ ...x, teamAId: '', teamBId: '', lineups: { a: emptyLineup(), b: emptyLineup() } })); }}>CREATE ANOTHER</button>
                   </>
                 )}

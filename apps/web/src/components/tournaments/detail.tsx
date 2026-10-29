@@ -50,8 +50,7 @@ export function TournamentPanel({ t, isAdmin }: { t: TournamentDetail; isAdmin: 
             <h2>{t.name}</h2>
           </div>
           <div className="tn-actions">
-            <Link href="/matches" className="mx-btn mx-btn-lg" data-variant="gray">MATCHES</Link>
-            {isAdmin && cricket && <Link href={`/create?mode=match&tournament=${t.id}`} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
+            {isAdmin && cricket && <Link href={`/tournaments/${t.id}/create`} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
           </div>
         </div>
         <div className="tn-kpis">{kpis.map(([k, v]) => <div key={k}><span className="lbl lbl-sm">{k}</span><b>{v}</b></div>)}</div>

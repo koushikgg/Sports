@@ -10,7 +10,7 @@ const STATUS: [string, Status][] = [['ALL', 'all'], ['ONGOING', 'live'], ['UPCOM
 const BADGE: Record<TournamentSummary['status'], [string, string]> = { live: ['ONGOING', 'live'], up: ['UPCOMING', 'up'], done: ['COMPLETED', 'ft'] };
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase() : '—');
 
-export function TournamentsBoard({ list, selected }: { list: TournamentSummary[]; selected: string | null }) {
+export function TournamentsBoard({ list }: { list: TournamentSummary[] }) {
   const ready = useHydrated();
   const [sport, setSport] = useState('all');
   const [status, setStatus] = useState<Status>('all');
@@ -40,7 +40,7 @@ export function TournamentsBoard({ list, selected }: { list: TournamentSummary[]
             const c = sportColor(t.sportKey), [label, tone] = BADGE[t.status];
             const pct = t.total ? Math.round((t.played / t.total) * 100) : 0;
             return (
-              <Link key={t.id} href={`/tournaments?t=${t.id}`} scroll={false} className="tn-card" data-on={selected === t.id ? 'true' : undefined} style={{ ['--tn' as string]: c }} aria-current={selected === t.id ? 'true' : undefined}>
+              <Link key={t.id} href={`/tournaments/${t.id}`} className="tn-card" style={{ ['--tn' as string]: c }}>
                 <div className="cw-row-between">
                   <span className="cw-sportline"><span className="mx-group-icon" style={{ background: `color-mix(in srgb, ${c} 16%, transparent)` }}><i style={{ background: c }} /></span><span className="lbl">{t.sportName.toUpperCase()}</span></span>
                   <span className="mx-badge" data-tone={tone}><i />{label}</span>

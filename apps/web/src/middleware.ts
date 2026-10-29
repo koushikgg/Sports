@@ -22,5 +22,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ['/admin/:path*', '/create/:path*', '/score/:path*', '/teams/:path*', '/players/:path*'],
+  matcher: ['/admin/:path*', '/create/:path*', '/tournaments/:id/create', '/profile/:path*', '/score/:path*', '/teams/:path*', '/players/:path*'],
 };
