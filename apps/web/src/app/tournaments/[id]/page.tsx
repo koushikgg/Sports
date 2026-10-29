@@ -31,13 +31,14 @@ export default async function TournamentPage({ params }: { params: Promise<{ id:
     ? (await getDb().select({ id: teams.id, name: teams.name }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).where(eq(sports.key, t.sportKey)).orderBy(asc(teams.name))).filter((x) => !inside.has(x.id))
     : undefined;
   const allVenues = user?.role === 'admin' ? await getDb().select({ id: venues.id, name: venues.name }).from(venues).orderBy(asc(venues.name)) : undefined;
+  const canEditMatches = user?.role === 'admin' || !!user?.managed?.includes(id);
   const fixturePrompt = user?.role === 'admin'
     ? (() => loadFixtureContext(id).then((l) => (l ? buildFixturePrompt(l.ctx) : undefined)))()
     : undefined;
   return (
     <RatchShell active="tournaments" user={user}>
       <ProfileBack href="/tournaments" label="ALL TOURNAMENTS" />
-      <TournamentPanel t={t} isAdmin={user?.role === 'admin'} candidates={candidates} fixturePrompt={await fixturePrompt} venues={allVenues} />
+      <TournamentPanel t={t} isAdmin={user?.role === 'admin'} candidates={candidates} fixturePrompt={await fixturePrompt} venues={allVenues} canEditMatches={canEditMatches} />
     </RatchShell>
   );
 }

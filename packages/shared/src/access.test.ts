@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_ITEMS, ROUTE_RULES, accessFor, canScoreMatch, decideGoogleSignIn, navFor, parseList, safeReturnPath, type Viewer } from './access';
+import { NAV_ITEMS, ROUTE_RULES, accessFor, canEditMatch, canScoreMatch, decideGoogleSignIn, navFor, parseList, safeReturnPath, type Viewer } from './access';
 
 const roles: (null | 'scorer' | 'admin')[] = [null, 'scorer', 'admin'];
 const viewerOf = (r: null | 'scorer' | 'admin'): Viewer => r ?? 'guest';
@@ -140,5 +140,52 @@ describe('parseList and safeReturnPath', () => {
       expect(safeReturnPath(bad as string | null | undefined), String(bad)).toBe('/');
     }
     expect(safeReturnPath('//evil.com', '/matches')).toBe('/matches');
+  });
+});
+
+describe('who can score and edit a tournament match', () => {
+  const t1 = 'tournament-1', t2 = 'tournament-2';
+  const admin = { id: 'a', role: 'admin' as const };
+  const scorer = { id: 's', role: 'scorer' as const };
+  const manager = { id: 'm', role: 'scorer' as const, managed: [t1] };
+  const m = (o: Partial<{ assignedScorerId: string | null; status: string; tournamentId: string | null }> = {}) => ({ assignedScorerId: null, status: 'scheduled', tournamentId: t1, ...o });
+
+  it('admins score everything that is not finished', () => {
+    expect(canScoreMatch(admin, m())).toBe(true);
+    expect(canScoreMatch(admin, m({ tournamentId: null }))).toBe(true);
+    expect(canScoreMatch(admin, m({ status: 'completed' }))).toBe(false);
+    expect(canScoreMatch(admin, m({ status: 'abandoned' }))).toBe(false);
+  });
+  it('a tournament manager scores that tournament, even a match assigned to someone else', () => {
+    expect(canScoreMatch(manager, m())).toBe(true);
+    expect(canScoreMatch(manager, m({ assignedScorerId: 'other' }))).toBe(true);
+    expect(canScoreMatch(manager, m({ status: 'live' }))).toBe(true);
+    expect(canScoreMatch(manager, m({ status: 'completed' }))).toBe(false);
+  });
+  it('a manager of one tournament is a viewer in another', () => {
+    expect(canScoreMatch(manager, m({ tournamentId: t2 }))).toBe(false);
+  });
+  it('an ordinary scorer is a viewer in a tournament, unless the match is assigned to them', () => {
+    expect(canScoreMatch(scorer, m())).toBe(false);
+    expect(canScoreMatch(scorer, m({ assignedScorerId: 's' }))).toBe(true);
+    expect(canScoreMatch(scorer, m({ assignedScorerId: 'other' }))).toBe(false);
+  });
+  it('outside a tournament the older rule holds: any scorer unless it is assigned to someone else', () => {
+    expect(canScoreMatch(scorer, m({ tournamentId: null }))).toBe(true);
+    expect(canScoreMatch(scorer, m({ tournamentId: null, assignedScorerId: 'other' }))).toBe(false);
+    expect(canScoreMatch(manager, m({ tournamentId: null }))).toBe(true);
+  });
+  it('guests never score', () => {
+    expect(canScoreMatch(null, m())).toBe(false);
+    expect(canScoreMatch(undefined, m({ tournamentId: null }))).toBe(false);
+  });
+  it('admins and that tournament’s managers edit its matches; nobody else does', () => {
+    expect(canEditMatch(admin, { tournamentId: t1 })).toBe(true);
+    expect(canEditMatch(admin, { tournamentId: null })).toBe(true);
+    expect(canEditMatch(manager, { tournamentId: t1 })).toBe(true);
+    expect(canEditMatch(manager, { tournamentId: t2 })).toBe(false);
+    expect(canEditMatch(manager, { tournamentId: null })).toBe(false);
+    expect(canEditMatch(scorer, { tournamentId: t1 })).toBe(false);
+    expect(canEditMatch(null, { tournamentId: t1 })).toBe(false);
   });
 });

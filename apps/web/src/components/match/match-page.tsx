@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import '@sports/sports-engine/src/all';
 import { getSnapshot } from '@sports/scoring';
-import { canScoreMatch } from '@sports/shared';
+import { canEditMatch, canScoreMatch } from '@sports/shared';
 import '@/components/cricket/ratch.css';
 import '@/components/matches/matches.css';
 import './match.css';
@@ -28,7 +28,7 @@ export async function MatchPageView({ id, where }: { id: string; where: { sport:
   if (!card || !snapshot) notFound();
   if ('sport' in where ? card.sportKey !== where.sport : card.tournamentId !== where.tournament) notFound();
   const canScore = canScoreMatch(user, card);
-  const scheduleVenues = user?.role === 'admin' && card.status === 'scheduled' && card.seq === 0 ? (await getDb().select({ name: venues.name }).from(venues).orderBy(asc(venues.name))).map((v) => v.name) : undefined;
+  const scheduleVenues = canEditMatch(user, card) && card.status === 'scheduled' && card.seq === 0 ? (await getDb().select({ name: venues.name }).from(venues).orderBy(asc(venues.name))).map((v) => v.name) : undefined;
 
   return (
     <RatchShell active={card.tournamentId ? 'tournaments' : 'matches'} user={user}>

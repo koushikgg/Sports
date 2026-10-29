@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { and, eq, getDb, inArray, matches, sql, teams, tournaments } from '@sports/db';
+import { and, eq, getDb, inArray, matches, sql, teams, tournamentManagers, tournaments } from '@sports/db';
 import type { BracketFixture, TournamentMeta } from '@sports/shared';
 import { toInstant } from '@sports/sports-engine/src/tournament-plan';
 import { audit, requireRole } from '@/lib/guard';
@@ -34,9 +34,9 @@ function orderError(bracket: BracketFixture[], no: number, date: string, time: s
   return null;
 }
 
-/** Admin only. Changes when and where a match that has not started is played. */
+/** Admins, and the managers of the match's tournament. Changes when and where a match that has not started is played. */
 export async function updateMatchSchedule(raw: unknown): Promise<{ error?: string }> {
-  const admin = await requireRole('admin');
+  const admin = await requireRole('admin', 'scorer');
   const p = z.object({ matchId: z.string().uuid() }).and(when).safeParse(raw);
   if (!p.success) return { error: p.error.issues[0]?.message ?? 'Check the form.' };
   const { matchId, date, time, tzOffset } = p.data;
@@ -46,6 +46,12 @@ export async function updateMatchSchedule(raw: unknown): Promise<{ error?: strin
   const db = getDb();
   const [m] = await db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
   if (!m) return { error: 'Match not found.' };
+  if (admin.role !== 'admin') {
+    const [mgr] = m.tournamentId
+      ? await db.select({ u: tournamentManagers.userId }).from(tournamentManagers).where(and(eq(tournamentManagers.tournamentId, m.tournamentId), eq(tournamentManagers.userId, admin.id))).limit(1)
+      : [];
+    if (!mgr) return { error: 'Only admins and this tournament’s managers can edit its matches.' };
+  }
   if (m.status !== 'scheduled' || m.lastSeq > 0) return { error: STARTED };
 
   const at = toInstant(date, time, tzOffset);

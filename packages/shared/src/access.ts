@@ -57,15 +57,29 @@ export const navFor = (role: Role | null | undefined): NavItem[] => {
   return NAV_ITEMS.filter((n) => n.allow.includes(viewer));
 };
 
-/** Whether a scorer or admin may score this match (admins always; scorers only if unassigned or assigned to them). */
+/**
+ * Whether someone may score this match. Admins always. A tournament's matches are scored by that tournament's managers
+ * (`user.managed` lists the tournaments they manage) or by the scorer an admin assigned to the match; everyone else is a
+ * viewer there. Matches outside a tournament follow the older rule: any scorer unless the match is assigned to someone else.
+ */
 export function canScoreMatch(
-  user: { id: string; role: Role } | null | undefined,
-  match: { assignedScorerId: string | null; status: string },
+  user: { id: string; role: Role; managed?: string[] } | null | undefined,
+  match: { assignedScorerId: string | null; status: string; tournamentId?: string | null },
 ): boolean {
   if (!user) return false;
   if (match.status === 'completed' || match.status === 'abandoned') return false;
   if (user.role === 'admin') return true;
+  if (match.tournamentId) return !!user.managed?.includes(match.tournamentId) || match.assignedScorerId === user.id;
   return user.role === 'scorer' && (!match.assignedScorerId || match.assignedScorerId === user.id);
+}
+
+/** Whether someone may edit a match's time and venue: admins, and the managers of the match's tournament. */
+export function canEditMatch(
+  user: { role: Role; managed?: string[] } | null | undefined,
+  match: { tournamentId?: string | null },
+): boolean {
+  if (!user) return false;
+  return user.role === 'admin' || (!!match.tournamentId && !!user.managed?.includes(match.tournamentId));
 }
 
 // ---------------------------------------------------------------------------

@@ -43,6 +43,13 @@
       "when": 1793280629597,
       "tag": "0005_superb_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793284739881,
+      "tag": "0006_light_moon_knight",
+      "breakpoints": true
     }
   ]
 }

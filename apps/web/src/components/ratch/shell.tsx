@@ -10,7 +10,7 @@ import { SignInButton } from './sign-in-button';
 import { UserMenu } from './user-menu';
 import { Suspense } from 'react';
 
-export type ShellUser = { id: string; name: string; role: Role; avatar?: string | null };
+export type ShellUser = { id: string; name: string; role: Role; avatar?: string | null; /** Tournaments this person manages: they score and edit the matches there. */ managed?: string[] };
 
 /**
  * Top-level shell. The navigation is built from the viewer's role (see NAV_ITEMS in @sports/shared),

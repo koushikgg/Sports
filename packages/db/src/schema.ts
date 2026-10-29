@@ -114,6 +114,17 @@ export const tournaments = pgTable('tournaments', {
   createdAt: createdAt(),
 });
 
+/** Users an admin made managers of a tournament: they score its matches and edit match data. Everyone else is a viewer. */
+export const tournamentManagers = pgTable(
+  'tournament_managers',
+  {
+    tournamentId: uuid('tournament_id').notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.tournamentId, t.userId] })],
+);
+
 export const matches = pgTable('matches', {
   id: id(),
   sportId: uuid('sport_id').notNull().references(() => sports.id),

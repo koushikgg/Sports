@@ -16,7 +16,9 @@ import {
   sports,
   teamMembers,
   teams,
+  tournamentManagers,
   tournaments,
+  users,
   type Reader,
 } from '@sports/db';
 import { FORMATS, type Ack, type BracketFixture, type FixtureSlot, type FormatKey, type MatchSnapshot, type MatchUpdate, type Role, type ScoreEventInput, type ScoreSummary, type SportKey, type TournamentMeta } from '@sports/shared';
@@ -164,6 +166,17 @@ export type SubmitResult = { ok: true; update: MatchUpdate; statusChanged: boole
  * scorers racing on the same ball cannot both win: the loser updates zero rows and gets a
  * conflict. No interactive transaction is needed, so each ball costs two round trips.
  */
+/** Managers change rarely and a ball is scored every few seconds, so the answer is remembered for a short while. */
+const managerCache = new Map<string, { at: number; yes: boolean }>();
+async function isTournamentManager(db: Reader, tournamentId: string, userId: string): Promise<boolean> {
+  const key = `${tournamentId}:${userId}`;
+  const hit = managerCache.get(key);
+  if (hit && Date.now() - hit.at < 15_000) return hit.yes;
+  const [row] = await db.select({ u: tournamentManagers.userId }).from(tournamentManagers).where(and(eq(tournamentManagers.tournamentId, tournamentId), eq(tournamentManagers.userId, userId))).limit(1);
+  managerCache.set(key, { at: Date.now(), yes: !!row });
+  return !!row;
+}
+
 export async function submitScoreEvent(actor: Actor, input: ScoreEventInput): Promise<SubmitResult> {
   if (actor.role !== 'admin' && actor.role !== 'scorer') {
     return { ok: false, code: 'forbidden', message: 'Not allowed to score' };
@@ -177,11 +190,16 @@ export async function submitScoreEvent(actor: Actor, input: ScoreEventInput): Pr
   if (CLOSED.includes(match.status) && input.type !== 'undo') {
     return { ok: false, code: 'closed', message: `Match is ${match.status}` };
   }
-  if (match.scorerId && match.scorerId !== actor.sub && actor.role !== 'admin') {
+  // Admins and the tournament's managers run its matches; in a tournament everyone else scores only a match assigned to them.
+  const privileged = actor.role === 'admin' || (!!match.tournamentId && (await isTournamentManager(db, match.tournamentId, actor.sub)));
+  if (match.tournamentId && !privileged && match.assignedScorerId !== actor.sub) {
+    return { ok: false, code: 'forbidden', message: 'Only this tournament’s managers can score its matches' };
+  }
+  if (match.scorerId && match.scorerId !== actor.sub && !privileged) {
     return { ok: false, code: 'locked', message: 'Another scorer is scoring this match' };
   }
 
-  if (match.assignedScorerId && match.assignedScorerId !== actor.sub && actor.role !== 'admin') {
+  if (match.assignedScorerId && match.assignedScorerId !== actor.sub && !privileged) {
     return { ok: false, code: 'forbidden', message: 'This match is assigned to another scorer' };
   }
 
@@ -249,7 +267,8 @@ export async function submitScoreEvent(actor: Actor, input: ScoreEventInput): Pr
 export async function releaseMatch(actor: Actor, matchId: string): Promise<boolean> {
   const db = getDb();
   const [match] = await db.select().from(matches).where(eq(matches.id, matchId)).limit(1);
-  if (!match || (match.scorerId !== actor.sub && actor.role !== 'admin')) return false;
+  const privileged = actor.role === 'admin' || (!!match?.tournamentId && (await isTournamentManager(getDb(), match.tournamentId, actor.sub)));
+  if (!match || (match.scorerId !== actor.sub && !privileged)) return false;
   await db.update(matches).set({ scorerId: null }).where(eq(matches.id, matchId));
   return true;
 }
@@ -661,6 +680,8 @@ export async function clearFixtures(tournamentId: string): Promise<number> {
 }
 
 export interface TournamentDetail extends TournamentSummary {
+  /** People who score the tournament's matches and edit their data. Names only: this page is public. */
+  managers: { id: string; name: string }[];
   /** Fixtures right now: scheduled matches plus imported ones waiting on a result. */
   fixtureCount: number;
   /** Once true, fixtures and teams are locked in. */
@@ -805,6 +826,7 @@ export async function getTournamentDetail(id: string, signedIn = false): Promise
     ...summary,
     meta,
     pending,
+    managers: await db.select({ id: users.id, name: users.name }).from(tournamentManagers).innerJoin(users, eq(users.id, tournamentManagers.userId)).where(eq(tournamentManagers.tournamentId, id)).orderBy(asc(users.name)),
     fixtureCount: cards.length + pending.length,
     started: await tournamentStarted(id),
     byes: (meta?.byes ?? []).map((b) => b.name),

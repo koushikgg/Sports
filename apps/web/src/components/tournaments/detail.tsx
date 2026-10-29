@@ -9,16 +9,17 @@ import { EditMatchSchedule, EditPendingFixture } from '@/components/match/edit-s
 import { EditTournament } from './edit-tournament';
 import { FixturesImport } from './fixtures-import';
 import { TableFixturesPanel } from './table-fixtures-panel';
+import { ManagersTab } from './managers-tab';
 import { TeamsTab } from './teams-tab';
 import { sportColor, statusGroup } from '@/components/matches/model';
 import { useHydrated } from '@/components/matches/time';
 import { StandingsTable } from './standings-table';
 
-type Tab = 'standings' | 'fixtures' | 'teams' | 'bracket' | 'leaders';
-const TABS: [string, Tab][] = [['STANDINGS', 'standings'], ['FIXTURES', 'fixtures'], ['TEAMS', 'teams'], ['BRACKET', 'bracket'], ['LEADERS', 'leaders']];
+type Tab = 'standings' | 'fixtures' | 'teams' | 'managers' | 'bracket' | 'leaders';
+const TABS: [string, Tab][] = [['STANDINGS', 'standings'], ['FIXTURES', 'fixtures'], ['TEAMS', 'teams'], ['MANAGERS', 'managers'], ['BRACKET', 'bracket'], ['LEADERS', 'leaders']];
 const dateLabel = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase() : '—');
 
-export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues }: { t: TournamentDetail; isAdmin: boolean; /** Admin only: teams that can still be added. */ candidates?: { id: string; name: string }[]; /** Admin only: the text the fixture JSON import asks them to copy. */ fixturePrompt?: string; /** Admin only: every venue, for the editor. */ venues?: { id: string; name: string }[] }) {
+export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues, canEditMatches }: { t: TournamentDetail; isAdmin: boolean; /** Admin only: teams that can still be added. */ candidates?: { id: string; name: string }[]; /** Admin only: the text the fixture JSON import asks them to copy. */ fixturePrompt?: string; /** Admin only: every venue, for the editor. */ venues?: { id: string; name: string }[]; /** Admins, and this tournament's managers: they can edit a match's time and venue. */ canEditMatches?: boolean }) {
   const hasBracket = !!t.bracket;
   const [tab, setTab] = useState<Tab>('standings');
   const [hover, setHover] = useState<number | null>(null);
@@ -133,7 +134,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues 
                         <span className="tn-score">{g === 'up' || !started ? time : `${(sa ?? '').split(' ')[0]} – ${(sb ?? '').split(' ')[0]}`}</span>
                         <b data-dim={m.winner === 'a' ? 'true' : undefined}>{m.teamB}</b>
                         <span style={{ display: 'flex', gap: 8, alignItems: 'center', justifySelf: 'end' }}>
-                          {isAdmin && m.status === 'scheduled' && m.seq === 0 && <EditMatchSchedule matchId={m.id} scheduledAt={m.scheduledAt} venue={m.venue} venues={venueNames} label="EDIT" small />}
+                          {(isAdmin || canEditMatches) && m.status === 'scheduled' && m.seq === 0 && <EditMatchSchedule matchId={m.id} scheduledAt={m.scheduledAt} venue={m.venue} venues={venueNames} label="EDIT" small />}
                                                   <Link href={`/tournaments/${t.id}/matches/${m.id}`} className="mx-btn" data-variant={g === 'live' ? 'blue' : 'gray'}>{g === 'live' ? 'WATCH' : g === 'up' ? 'DETAILS' : 'SCORECARD'}</Link>
                         </span>
                       </div>
@@ -158,6 +159,8 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues 
             started={t.started}
           />
         )}
+
+        {active === 'managers' && <ManagersTab tournamentId={t.id} managers={t.managers} isAdmin={isAdmin} />}
 
         {active === 'bracket' && t.bracket && (
           <>
