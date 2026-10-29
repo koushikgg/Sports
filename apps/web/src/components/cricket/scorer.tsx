@@ -148,11 +148,11 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   // Cancelling the very first toss leaves the console: there is nothing to score without one, and nothing has been saved.
   const backHref = backTo ?? `/sports/${snapshot.sportKey}/matches/${snapshot.matchId}`;
   const [toss, setToss] = useState<{ win: string; choice: 'bat' | 'bowl' }>({ win: s.teams[0]!.id, choice: 'bat' });
-  const [open, setOpen] = useState<{ sel: string[]; bowler: string }>({ sel: [], bowler: '' });
+  const [open, setOpen] = useState<{ striker: string; non: string; bowler: string; step: 'striker' | 'non' | 'bowler' }>({ striker: '', non: '', bowler: '', step: 'striker' });
   const [res, setRes] = useState<string>('tie');
 
   useEffect(() => { if (s.awaiting !== 'complete') setAckFinal(false); }, [s.awaiting]);
-  useEffect(() => { setOpen({ sel: [], bowler: '' }); }, [s.innings.length]);
+  useEffect(() => { setOpen({ striker: '', non: '', bowler: '', step: 'striker' }); }, [s.innings.length]);
 
   // The engine says what it needs next; those prompts cannot be dismissed.
   // (while the toss is being corrected, the toss sheet stands in front of the openers prompt)
@@ -303,8 +303,10 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
 
   const nextBat = nextInningsBattingTeam(s);
   const openBowlers = nextBat ? squad(otherTeam(s, nextBat)) : [];
-  const openBowler = open.bowler || openBowlers[0]?.id || '';
-  const [pickS, pickN] = open.sel;
+  // nobody is chosen for you: the opening bowler must be picked like the openers
+  const openBowler = open.bowler;
+  const [pickS, pickN] = [open.striker, open.non];
+  const openersReady = !!(pickS && pickN && openBowler);
   const tossWinnerName = teamName(toss.win);
 
   const lastOver = overs.at(-1);
@@ -317,13 +319,13 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
     toss: sheet === 'toss'
       ? { kicker: 'CORRECT THE TOSS', title: 'Edit toss', w: 560, primary: 'SAVE TOSS', secondary: 'CANCEL', closable: true }
       : { kicker: 'BEFORE THE MATCH', title: 'Toss', w: 560, primary: 'CONTINUE', secondary: 'CANCEL', closable: false },
-    openers: { kicker: `INNINGS ${s.innings.length + 1} · ${nextBat ? teamName(nextBat).toUpperCase() : ''}`, title: 'Select openers', w: 720, primary: 'START INNINGS', closable: false },
+    openers: { kicker: `INNINGS ${s.innings.length + 1} · ${nextBat ? teamName(nextBat).toUpperCase() : ''} BAT`, title: 'Who starts the innings?', w: 760, primary: 'START INNINGS', closable: false },
     batter: { kicker: s.lastAction?.type === 'retire' ? 'BATTER RETIRED' : 'WICKET FELL', title: 'Who is the new batter?', w: 560, secondary: 'UNDO', closable: false },
     bowler: { kicker: `OVER ${lastOver?.no ?? Math.max(1, Math.floor((inn?.legalBalls ?? 0) / 6))} COMPLETE · ${lastOver?.runs ?? 0} RUNS`, title: 'Who bowls next?', w: 560, secondary: 'UNDO', closable: false },
     final: { kicker: 'END OF MATCH', title: 'Result', w: 560, primary: 'DONE', secondary: 'UNDO LAST BALL', closable: true },
   };
   const m = meta[shown];
-  const showPrimary = !!m.primary && !(shown === 'openers' && !(pickS && pickN));
+  const showPrimary = !!m.primary;
 
   const primary = () => {
     switch (shown) {
@@ -685,35 +687,79 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
             </>
           )}
 
-          {shown === 'openers' && nextBat && (
-            <>
-              <div className="sc-note">Tap the striker first, then the non-striker.</div>
-              {canEditToss(s) && <button type="button" className="sc-textbtn" onClick={startEditToss}>Wrong toss? Edit it</button>}
-              <div className="sc-openers">
-                {squad(nextBat).map((p) => {
-                  const k = open.sel.indexOf(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="sc-opener"
-                      data-on={on(k >= 0)}
-                      onClick={() => setOpen((x) => ({ ...x, sel: x.sel.includes(p.id) ? x.sel.filter((j) => j !== p.id) : [...x.sel, p.id].slice(-2) }))}
-                    >
-                      <span>{p.name}</span>
-                      <span className="tag">{k === 0 ? 'STRIKER' : k === 1 ? 'NON-STRIKER' : ''}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <Label>OPENING BOWLER · {teamName(otherTeam(s, nextBat)).toUpperCase()}</Label>
-              <div className="sc-opts" data-wrap="true">
-                {openBowlers.map((p) => (
-                  <Opt key={p.id} text selected={openBowler === p.id} onClick={() => setOpen((x) => ({ ...x, bowler: p.id }))}>{p.name}</Opt>
-                ))}
-              </div>
-            </>
-          )}
+          {shown === 'openers' && nextBat && (() => {
+            const batTeam = nextBat, bowlTeam = otherTeam(s, nextBat);
+            const first = s.innings.length === 0;
+            const slots = [
+              { key: 'striker' as const, n: 1, label: 'STRIKER', hint: 'Faces the first ball', id: open.striker, team: batTeam },
+              { key: 'non' as const, n: 2, label: 'NON-STRIKER', hint: 'At the other end', id: open.non, team: batTeam },
+              { key: 'bowler' as const, n: 3, label: 'OPENING BOWLER', hint: `${teamName(bowlTeam)} bowl`, id: open.bowler, team: bowlTeam },
+            ];
+            const active = slots.find((x) => x.key === open.step)!;
+            const nameOfId = (id: string) => (id ? squad(batTeam).concat(squad(bowlTeam)).find((p) => p.id === id)?.name ?? '' : '');
+            const taken = (id: string) => slots.find((x) => x.team === active.team && x.key !== active.key && x.id === id);
+            const choose = (id: string) => setOpen((x) => {
+              const next = { ...x, [active.key]: x[active.key] === id ? '' : id } as typeof x;
+              // move on to the next empty slot after a pick
+              const order: ('striker' | 'non' | 'bowler')[] = ['striker', 'non', 'bowler'];
+              const empty = order.find((k) => !next[k]);
+              return { ...next, step: next[active.key] && empty ? empty : x.step };
+            });
+            const missing = slots.find((x) => !x.id);
+            return (
+              <>
+                <div className="so-recap">
+                  <span><b>{teamName(batTeam)}</b> {first ? 'bat first' : 'bat'}</span>
+                  {first && s.toss && <span>{teamName(s.toss.winnerTeamId)} won the toss and chose to {s.toss.decision}</span>}
+                  {canEditToss(s) && <button type="button" className="sc-textbtn" onClick={startEditToss}>Wrong toss? Edit it</button>}
+                </div>
+
+                <div className="so-slots" role="group" aria-label="Openers and opening bowler">
+                  {slots.map((x, i) => (
+                    <div key={x.key} style={{ display: 'contents' }}>
+                      <button type="button" className="so-slot" data-active={on(open.step === x.key)} data-filled={on(!!x.id)} aria-pressed={open.step === x.key} onClick={() => setOpen((o) => ({ ...o, step: x.key }))}>
+                        <span className="so-n" aria-hidden>{x.id ? '✓' : x.n}</span>
+                        <span className="so-slot-text">
+                          <small>{x.label}</small>
+                          <b>{x.id ? nameOfId(x.id) : 'Tap to choose'}</b>
+                          <em>{x.hint}</em>
+                        </span>
+                      </button>
+                      {i === 0 && (
+                        <button type="button" className="so-swap" aria-label="Swap striker and non-striker" title="Swap striker and non-striker" disabled={!open.striker || !open.non} onClick={() => setOpen((o) => ({ ...o, striker: o.non, non: o.striker }))}>⇄</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <Label>{active.key === 'bowler' ? `CHOOSE THE OPENING BOWLER · ${teamName(bowlTeam).toUpperCase()}` : `CHOOSE THE ${active.label} · ${teamName(batTeam).toUpperCase()}`}</Label>
+                <div className="so-players">
+                  {squad(active.team).map((p) => {
+                    const other = taken(p.id);
+                    const mine = active.id === p.id;
+                    return (
+                      <button key={p.id} type="button" className="so-player" data-on={on(mine)} disabled={!!other} onClick={() => choose(p.id)}>
+                        <span className="so-ava" aria-hidden>{p.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')}</span>
+                        <span className="so-pname">{p.name}</span>
+                        <span className="so-tags">
+                          {p.isCaptain && <i>C</i>}
+                          {p.isKeeper && <i>WK</i>}
+                          {other && <i data-on="true">{other.label}</i>}
+                          {mine && <i data-on="true">✓</i>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="so-ready" data-ready={on(openersReady)} role="status">
+                  {openersReady
+                    ? <>{nameOfId(pickS)} and {nameOfId(pickN)} open the batting. {nameOfId(openBowler)} bowls the first over.</>
+                    : <>Next: choose the {missing ? missing.label.toLowerCase() : ''}.</>}
+                </div>
+              </>
+            );
+          })()}
 
           {shown === 'batter' && inn && (
             <>
@@ -791,7 +837,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                 <Btn variant="gray" onClick={secondary} disabled={(shown === 'batter' || shown === 'bowler' || shown === 'final') && !canUndo}>{m.secondary}</Btn>
               )}
               {showPrimary && (
-                <Btn variant={m.variant ?? 'primary'} onClick={primary} disabled={busy || (!connected && shown !== 'final')}>{m.primary!}</Btn>
+                <Btn variant={m.variant ?? 'primary'} onClick={primary} disabled={busy || (!connected && shown !== 'final') || (shown === 'openers' && !openersReady)}>{m.primary!}</Btn>
               )}
             </div>
           )}
