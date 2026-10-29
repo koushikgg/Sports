@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 
 /* Shared controls for the admin and forms. Ratch look: soft cards, pill buttons, mono labels, no strokes. */
 const field =
-  'w-full rounded-lg bg-surface-2 px-3 py-2.5 text-sm text-fg outline-none placeholder:text-muted/70 focus-visible:ring-2 focus-visible:ring-accent';
+  'w-full rounded-lg bg-surface-2 px-3 py-2.5 text-sm text-fg outline-none focus:outline-none focus-visible:outline-none placeholder:text-muted/70';
 
 export function PageHeader({ title, children }: { title: string; children?: React.ReactNode }) {
   return (

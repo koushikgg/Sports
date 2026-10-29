@@ -40,7 +40,7 @@
 .lg-pw summary:hover { color: #fff; }
 .lg-pw form { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 16px; }
 .lg-pw input { height: 44px; padding: 0 14px; border-radius: 8px; border: none; outline: none; background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; }
-.lg-pw input:focus-visible { box-shadow: 0 0 0 2px var(--blue); }
+.lg-pw input:focus-visible { outline: none; box-shadow: none; }
 .lg-pw button { height: 44px; border-radius: 999px; background: var(--surface-muted); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
 .lg-pw button:hover { filter: brightness(1.15); }
 

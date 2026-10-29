@@ -6,7 +6,7 @@ const viewerOf = (r: null | 'scorer' | 'admin'): Viewer => r ?? 'guest';
 
 describe('accessFor', () => {
   it('public pages are open to everyone', () => {
-    for (const p of ['/', '/matches', '/tournaments', '/standings', '/sports', '/sports/cricket', '/sports/cricket/matches/abc', '/display/abc', '/login']) {
+    for (const p of ['/', '/matches', '/tournaments', '/sports', '/sports/cricket', '/sports/cricket/matches/abc', '/display/abc', '/login']) {
       for (const r of roles) expect(accessFor(r, p), `${r} ${p}`).toBe('ok');
     }
   });
@@ -61,9 +61,9 @@ describe('navigation matches access', () => {
   });
 
   it('role menus: guest < scorer < admin', () => {
-    expect(navFor(null).map((n) => n.key)).toEqual(['home', 'matches', 'tournaments', 'standings']);
-    expect(navFor('scorer').map((n) => n.key)).toEqual(['home', 'matches', 'tournaments', 'standings', 'teams', 'players', 'score']);
-    expect(navFor('admin').map((n) => n.key)).toEqual(['home', 'matches', 'tournaments', 'standings', 'teams', 'players', 'score', 'create']);
+    expect(navFor(null).map((n) => n.key)).toEqual(['home', 'matches', 'tournaments']);
+    expect(navFor('scorer').map((n) => n.key)).toEqual(['home', 'matches', 'tournaments', 'teams', 'players', 'score']);
+    expect(navFor('admin').map((n) => n.key)).toEqual(['home', 'matches', 'tournaments', 'teams', 'players', 'score', 'create']);
   });
 
   it('rules never allow nobody', () => {

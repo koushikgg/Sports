@@ -47,7 +47,7 @@
 .cw-input { height: 44px; padding: 0 14px; border-radius: 8px; border: none; outline: none; background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; min-width: 0; }
 .cw-input[type='date'], .cw-input[type='time'] { font-family: var(--font-mono); color-scheme: dark; }
 .cw-input-lg { height: 48px; font-size: 16px; }
-.cw-input:focus-visible, .cw-field:focus-within .cw-input { box-shadow: 0 0 0 2px var(--blue); }
+.cw-input:focus-visible { outline: none; box-shadow: none; }
 .cw-input::placeholder { color: var(--text-tertiary); }
 .cw-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
 .cw-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }

@@ -44,7 +44,6 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: 'HOME', href: '/', allow: EVERYONE },
   { key: 'matches', label: 'MATCHES', href: '/matches', allow: EVERYONE },
   { key: 'tournaments', label: 'TOURNAMENTS', href: '/tournaments', allow: EVERYONE },
-  { key: 'standings', label: 'STANDINGS', href: '/standings', allow: EVERYONE },
   { key: 'teams', label: 'TEAMS', href: '/teams', allow: MEMBERS },
   { key: 'players', label: 'PLAYERS', href: '/players', allow: MEMBERS },
   { key: 'score', label: 'SCORE', href: '/score', allow: MEMBERS },

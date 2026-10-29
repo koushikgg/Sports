@@ -36,6 +36,8 @@
   :where(.ratch) button:disabled { cursor: not-allowed; }
 }
 .ratch :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* text fields show no focus outline or ring */
+.ratch input:focus, .ratch input:focus-visible, .ratch select:focus, .ratch select:focus-visible, .ratch textarea:focus, .ratch textarea:focus-visible { outline: none; box-shadow: none; }
 
 /* mono "system voice" labels */
 .ratch .lbl {

@@ -4,7 +4,7 @@
 
 | Route | Guest | Scorer | Admin |
 |---|---|---|---|
-| `/`, `/matches`, `/tournaments`, `/standings`, `/sports/**`, match pages, `/display/**` | yes | yes | yes |
+| `/`, `/matches`, `/tournaments`, `/sports/**`, match pages, `/display/**` | yes | yes | yes |
 | `/teams`, `/players`, `/score`, `/score/[id]` | sign in | yes | yes |
 | `/admin/**`, `/create` | sign in | 403 | yes |
 

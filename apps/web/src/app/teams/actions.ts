@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { and, eq, getDb, players, teamManagers, teamMembers, teams, users } from '@sports/db';
+import { and, count, eq, getDb, matches, players, sql, teamManagers, teamMembers, teams, users } from '@sports/db';
 import { audit, requireRole } from '@/lib/guard';
 import { requireTeamManager } from '@/lib/team-access';
 
@@ -26,18 +26,24 @@ export async function createTeam(formData: FormData) {
   redirect(`/teams/${row!.id}`);
 }
 
-/** Admin only. */
-export async function deleteTeam(formData: FormData) {
-  const user = await requireRole('admin');
-  const id = uuid.parse(formData.get('id'));
-  await getDb().delete(teams).where(eq(teams.id, id));
-  await audit(user.id, 'delete', 'team', id);
-  redirect('/teams');
-}
 const refresh = (teamId: string) => {
   revalidatePath(`/teams/${teamId}`);
   revalidatePath('/teams');
 };
+
+/** Admin only. Teams with matches cannot be deleted: that would orphan their scorecards. */
+export async function deleteTeam(formData: FormData): Promise<{ error?: string }> {
+  const user = await requireRole('admin');
+  const id = uuid.parse(formData.get('id'));
+  const db = getDb();
+  const [used] = await db.select({ n: count() }).from(matches).where(sql`${matches.teamAId} = ${id} or ${matches.teamBId} = ${id}`);
+  const n = Number(used?.n ?? 0);
+  if (n > 0) return { error: `This team is in ${n} match${n === 1 ? '' : 'es'}, so it can’t be deleted. Delete those matches first.` };
+  await db.delete(teams).where(eq(teams.id, id));
+  await audit(user.id, 'delete', 'team', id);
+  revalidatePath('/teams');
+  return {};
+}
 
 /** Adds someone from the player directory to the roster. */
 export async function addPlayerToTeam(formData: FormData) {
@@ -92,6 +98,25 @@ export async function makeCaptain(formData: FormData) {
   await db.update(teamMembers).set({ isCaptain: false }).where(eq(teamMembers.teamId, teamId));
   await db.update(teamMembers).set({ isCaptain: true }).where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.playerId, playerId)));
   await audit(admin.id, 'set_captain', 'team', teamId, { playerId });
+  refresh(teamId);
+}
+
+/** Admin only. */
+export async function clearCaptain(formData: FormData) {
+  const admin = await requireRole('admin');
+  const teamId = uuid.parse(formData.get('teamId'));
+  await getDb().update(teamMembers).set({ isCaptain: false }).where(eq(teamMembers.teamId, teamId));
+  await audit(admin.id, 'clear_captain', 'team', teamId);
+  refresh(teamId);
+}
+
+/** Admin only. */
+export async function renameTeam(formData: FormData) {
+  const admin = await requireRole('admin');
+  const teamId = uuid.parse(formData.get('teamId'));
+  const name = z.string().trim().min(1).max(40).parse(formData.get('name'));
+  await getDb().update(teams).set({ name }).where(eq(teams.id, teamId));
+  await audit(admin.id, 'rename', 'team', teamId, { name });
   refresh(teamId);
 }
 
