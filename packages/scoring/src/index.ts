@@ -22,6 +22,7 @@ import {
 import { FORMATS, type Ack, type FormatKey, type MatchSnapshot, type MatchUpdate, type Role, type ScoreEventInput, type ScoreSummary, type SportKey, type TournamentMeta } from '@sports/shared';
 import { formatOvers, type CricketState } from '@sports/sports-engine/src/cricket';
 import { matchTeamStats } from '@sports/sports-engine/src/cricket-view';
+import { computeCricketBoards, type Board, type BoardRow, type LeaderMatch } from '@sports/sports-engine/src/leaders';
 import { computeStandings, type FinishedMatch, type Standing } from '@sports/sports-engine/src/standings';
 import { projectKnockout, projectLeagueKnockout, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
 import {
@@ -377,6 +378,31 @@ export async function getMatchCard(matchId: string, signedIn = false): Promise<M
   return (await listMatchCards({ matchId, signedIn, limit: 1 }))[0] ?? null;
 }
 
+export interface LeaderboardRow extends BoardRow { name: string }
+export interface Leaderboard extends Omit<Board, 'rows'> { rows: LeaderboardRow[] }
+
+/** The tournament's cricket leaderboards (runs, wickets, wins, catches, averages, records, economy). */
+export async function getTournamentLeaderboards(tournamentId: string): Promise<Leaderboard[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ state: matchStates.state, status: matches.status, result: matches.result })
+    .from(matchStates)
+    .innerJoin(matches, eq(matches.id, matchStates.matchId))
+    .where(eq(matches.tournamentId, tournamentId));
+  const input: LeaderMatch[] = rows
+    .filter((r) => (r.state as CricketState | null)?.kind === 'cricket')
+    .map((r) => ({ state: r.state as CricketState, completed: r.status === 'completed', winnerTeamId: ((r.result as { winnerTeamId?: string | null } | null)?.winnerTeamId ?? null) }));
+
+  const ids = new Set<string>();
+  for (const m of input) {
+    for (const squad of Object.values(m.state.squads ?? {})) squad.forEach((id) => ids.add(id));
+    for (const inn of m.state.innings) { Object.keys(inn.batters).forEach((id) => ids.add(id)); Object.keys(inn.bowlers).forEach((id) => ids.add(id)); }
+  }
+  const nameRows = ids.size ? await db.select({ id: players.id, name: players.name }).from(players).where(inArray(players.id, [...ids])) : [];
+  const names = Object.fromEntries(nameRows.map((p) => [p.id, p.name]));
+  return computeCricketBoards(input, names).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, name: names[r.playerId] ?? '?' })) }));
+}
+
 export interface Leader {
   playerId: string;
   name: string;
@@ -465,7 +491,8 @@ export interface TournamentDetail extends TournamentSummary {
   standings: StandingRow[];
   /** The tournament's matches (fixtures made through the match wizard), with scores. */
   matches: MatchCardData[];
-  leaders: { runs: Leader[]; wickets: Leader[] } | null;
+  /** Cricket leaderboards; null for other sports. */
+  boards: Leaderboard[] | null;
   /** A projection from the standings (or seeding), not fixtures. */
   bracket: { rounds: BracketRound[]; seeds: string[]; projected: boolean } | null;
   qualify: number;
@@ -595,7 +622,7 @@ export async function getTournamentDetail(id: string, signedIn = false): Promise
     meta,
     standings,
     matches: cards,
-    leaders: row.sportKey === 'cricket' ? await getCricketLeaders(5, id) : null,
+    boards: row.sportKey === 'cricket' ? await getTournamentLeaderboards(id) : null,
     bracket: rounds.length ? { rounds, seeds, projected: summary.played === 0 || summary.formatKey !== 'ko' } : null,
     qualify,
     tiebreak,

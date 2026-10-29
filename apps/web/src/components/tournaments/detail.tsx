@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { TournamentDetail } from '@sports/scoring';
-import { LeaderBoard } from '@/components/sports/leaders';
+import { Leaderboards } from './leaderboards';
 import { sportColor, statusGroup } from '@/components/matches/model';
 import { useHydrated } from '@/components/matches/time';
 import { StandingsTable } from './standings-table';
@@ -18,7 +18,7 @@ export function TournamentPanel({ t, isAdmin }: { t: TournamentDetail; isAdmin: 
   const ready = useHydrated();
   const color = sportColor(t.sportKey);
   const cricket = t.sportKey === 'cricket';
-  const tabs = TABS.filter(([, v]) => (v === 'bracket' ? hasBracket : v === 'leaders' ? !!t.leaders : true));
+  const tabs = TABS.filter(([, v]) => (v === 'bracket' ? hasBracket : v === 'leaders' ? !!t.boards : true));
   const active = tabs.some(([, v]) => v === tab) ? tab : 'standings';
 
   const leader = t.standings.find((s) => s.played > 0);
@@ -128,12 +128,7 @@ export function TournamentPanel({ t, isAdmin }: { t: TournamentDetail; isAdmin: 
           </>
         )}
 
-        {active === 'leaders' && t.leaders && (
-          <div className="tn-leaders">
-            <LeaderBoard title="MOST RUNS" unit="runs" rows={t.leaders.runs} />
-            <LeaderBoard title="MOST WICKETS" unit="wkts" rows={t.leaders.wickets} />
-          </div>
-        )}
+        {active === 'leaders' && t.boards && <Leaderboards boards={t.boards} />}
       </div>
     </section>
   );

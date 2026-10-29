@@ -80,6 +80,8 @@
 
 .tn-leaders { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; }
 .tn-leaders .sh-card { background: var(--surface-sunken); }
+.tn-rule { margin: 4px 0 10px; font-size: 12px; color: var(--text-tertiary); }
+.tn-note { margin: 10px 0 0; font-size: 11px; color: var(--text-tertiary); }
 
 /* directories */
 .dr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
