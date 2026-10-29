@@ -3,6 +3,7 @@ import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveProfile } from '@/app/profile/actions';
 import { Avatar } from '@/components/ratch/avatar';
+import { toast } from '@/components/ratch/toast';
 
 /** Centre-crops to a square and shrinks to 256px, so the photo stored is a few tens of KB. */
 async function toSquare(file: File, size = 256): Promise<string> {
@@ -20,7 +21,6 @@ export function ProfileEditor({ name, email, role, avatar }: { name: string; ema
   const [draft, setDraft] = useState(name);
   const [photo, setPhoto] = useState<string | null>(null); // a new, unsaved photo
   const [removed, setRemoved] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const shown = removed ? null : (photo ?? avatar);
@@ -28,9 +28,9 @@ export function ProfileEditor({ name, email, role, avatar }: { name: string; ema
 
   const pick = async (f: File | undefined) => {
     if (!f) return;
-    if (!f.type.startsWith('image/')) return setMsg({ text: 'Choose an image file.', bad: true });
-    if (f.size > 12 * 1024 * 1024) return setMsg({ text: 'That image is over 12 MB.', bad: true });
-    try { setPhoto(await toSquare(f)); setRemoved(false); setMsg(null); } catch { setMsg({ text: 'That image could not be read.', bad: true }); }
+    if (!f.type.startsWith('image/')) return toast.error('Choose an image file.');
+    if (f.size > 12 * 1024 * 1024) return toast.error('That image is over 12 MB.');
+    try { setPhoto(await toSquare(f)); setRemoved(false); } catch { toast.error('That image could not be read.'); }
   };
 
   const save = () => {
@@ -39,8 +39,8 @@ export function ProfileEditor({ name, email, role, avatar }: { name: string; ema
     fd.set('avatar', photo ?? (removed ? 'remove' : ''));
     start(async () => {
       const r = await saveProfile(fd);
-      if (r.error) return setMsg({ text: r.error, bad: true });
-      setPhoto(null); setRemoved(false); setMsg({ text: 'Profile saved.' });
+      if (r.error) return toast.error(r.error);
+      setPhoto(null); setRemoved(false); toast.success('Profile saved.');
       router.refresh();
     });
   };
@@ -61,7 +61,6 @@ export function ProfileEditor({ name, email, role, avatar }: { name: string; ema
         <label className="pf-field"><span className="lbl">EMAIL</span><input value={email} readOnly tabIndex={-1} /></label>
         <div className="pf-acts">
           <button type="submit" className="pf-save" disabled={!dirty || !draft.trim() || pending}>{pending ? 'SAVING…' : 'SAVE'}</button>
-          {msg && <span className="pf-msg" data-bad={msg.bad ? '' : undefined} role="status">{msg.text}</span>}
         </div>
       </form>
     </div>

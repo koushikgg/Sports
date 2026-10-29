@@ -113,10 +113,6 @@
 .sc-kbd span:last-child { font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--text-secondary); }
 
 /* ---------- toast ---------- */
-.sc-toast { position: fixed; left: 50%; bottom: 20px; z-index: 70; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; transition: transform 300ms var(--ease-out), opacity 250ms var(--ease-out); }
-.sc-toast[data-show='true'] { transform: translate(-50%, 0); opacity: 1; }
-.sc-toast div { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 999px; background: #f4f5f7; color: #101828; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); white-space: nowrap; font-size: 14px; font-weight: 500; }
-.sc-toast i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 
 /* ---------- sheets (modal) ---------- */
 .sc-scrim { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 80px 24px 24px; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-standard); }
@@ -127,6 +123,8 @@
 .sc-sheet-title { font-family: var(--font-display); font-weight: 600; font-size: 26px; letter-spacing: -0.02em; margin-top: 2px; }
 .sc-x { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-muted); color: var(--text-secondary); font-size: 18px; }
 .sc-sheet-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.sc-textbtn { align-self: flex-start; background: transparent; border: none; padding: 6px 0; color: var(--amber); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .06em; cursor: pointer; }
+.sc-textbtn:hover { text-decoration: underline; }
 .sc-note { font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
 .sc-well { padding: 12px 14px; border-radius: 12px; background: var(--surface-sunken); }
 .sc-amberline { font-size: 14px; color: var(--amber); padding: 12px 14px; border-radius: 12px; background: var(--amber-faint); }

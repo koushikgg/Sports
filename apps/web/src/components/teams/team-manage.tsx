@@ -9,6 +9,7 @@ import type { PersonHit } from '@/app/api/teams/[id]/people-search/route';
 import { teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
 import './team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 const Dots = ({ size }: { size: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="12" cy="5" r="2.2" /><circle cx="12" cy="12" r="2.2" /><circle cx="12" cy="19" r="2.2" /></svg>
@@ -95,11 +96,8 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
   const [confirm, setConfirm] = useState<Pending | 'delete' | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(team.name);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const setProblem = (m: string | null) => { if (m) toast.error(m); };
   const logoInput = useRef<HTMLInputElement>(null);
-  useEffect(() => () => clearTimeout(timer.current), []);
 
   useEffect(() => {
     if (!menu) return;
@@ -108,7 +106,7 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
     return () => window.removeEventListener('keydown', esc);
   }, [menu]);
 
-  const say = (t: string) => { clearTimeout(timer.current); setToast(t); timer.current = setTimeout(() => setToast(null), 2200); };
+  const say = (t: string) => toast.success(t);
   const run = (job: () => Promise<unknown>, done: string, after?: () => void) =>
     startTx(async () => {
       try {
@@ -277,15 +275,6 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
         )}
       </div>
 
-      {problem && (
-        <div className="tm-modal" onClick={() => setProblem(null)}>
-          <div className="tm-dialog" role="alertdialog" aria-label="Could not finish" onClick={(e) => e.stopPropagation()}>
-            <h2>That didn’t work</h2>
-            <p>{problem}</p>
-            <div className="tm-acts"><button type="button" className="tm-btn" onClick={() => setProblem(null)}>OK</button></div>
-          </div>
-        </div>
-      )}
 
       {isAdmin && <input ref={logoInput} type="file" accept="image/*" hidden aria-label="Team photo" onChange={(e) => { void pickLogo(e.target.files?.[0]); e.target.value = ''; }} />}
 
@@ -320,9 +309,6 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
         </div>
       )}
 
-      <div className="tm-toast" role="status" aria-live="polite" style={{ opacity: toast ? 1 : 0, transform: `translate(-50%, ${toast ? 0 : 20}px)` }}>
-        {toast && <div><i />{toast}</div>}
-      </div>
     </div>
   );
 }

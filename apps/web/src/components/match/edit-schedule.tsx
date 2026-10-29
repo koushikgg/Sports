@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateMatchSchedule, updatePendingFixture } from '@/app/schedule-actions';
 import '@/components/teams/team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 type Value = { date: string; time: string; venue: string };
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -16,7 +17,7 @@ function Dialog({ title, initial, venues, save, onClose }: { title: string; init
   const listId = useId();
   const [v, setV] = useState(initial);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const setError = (m: string | null) => { if (m) toast.error(m); };
   const dirty = v.date !== initial.date || v.time !== initial.time || v.venue.trim() !== initial.venue.trim();
   const submit = async () => {
     setBusy(true); setError(null);
@@ -39,7 +40,6 @@ function Dialog({ title, initial, venues, save, onClose }: { title: string; init
           <datalist id={listId}>{venues.map((x) => <option key={x} value={x} />)}</datalist>
         </label>
         <p>Pick a venue from the list or type a new one. A team can’t be given two matches at the same time.</p>
-        {error && <p role="alert" style={{ color: 'var(--red-text)' }}>{error}</p>}
         <div className="tm-acts">
           <button type="button" className="tm-btn" onClick={onClose}>CANCEL</button>
           <button type="submit" className="tm-btn" data-v="amber" disabled={!dirty || !v.date || !v.time || busy}>{busy ? 'SAVING…' : 'SAVE'}</button>

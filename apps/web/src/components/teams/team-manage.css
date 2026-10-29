@@ -79,7 +79,4 @@
 .tm-btn[data-v="danger"] { background: var(--red); color: #fff; }
 .tm-btn[data-v="amber"] { background: var(--amber); color: #0d0e11; }
 .tm-btn:disabled { opacity: .4; }
-.tm-toast { position: fixed; left: 50%; bottom: 24px; z-index: 30; pointer-events: none; transition: transform 300ms var(--ease-out), opacity 250ms; }
-.tm-toast div { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 999px; background: #f4f5f7; color: #101828; box-shadow: 0 10px 30px rgba(0,0,0,.4); white-space: nowrap; font-size: 14px; font-weight: 500; }
-.tm-toast i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 @media (max-width: 640px) { .tm-id h1 { font-size: 32px; } .tm-hero { padding: 20px; } }

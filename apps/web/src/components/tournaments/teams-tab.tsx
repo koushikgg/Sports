@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { addTournamentTeam, removeTournamentTeam } from '@/app/tournaments/[id]/actions';
 import { teamCode, teamTint } from '@/components/matches/model';
 import '@/components/teams/team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 export interface TournamentTeam { id: string; name: string; matches: number }
 const stack = (i: number, n: number) => (n === 1 ? '20px' : i === 0 ? '20px 20px 6px 6px' : i === n - 1 ? '6px 6px 20px 20px' : '6px');
@@ -24,15 +25,14 @@ export function TeamsTab({ tournamentId, teams: serverTeams, candidates: serverC
   const guard = fixtureCount > 0 && !started;
   const [warn, setWarn] = useState<{ title: string; go: string; job: () => void } | null>(null);
   const request = (title: string, go: string, job: () => void) => (guard ? setWarn({ title, go, job }) : job());
-  const [problem, setProblem] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const setProblem = (m: string | null) => { if (m) toast.error(m); };
 
   const term = q.trim();
   const lower = term.toLowerCase();
   const hits = candidates && term ? candidates.filter((c) => c.name.toLowerCase().includes(lower)).slice(0, 6) : [];
   const exact = (candidates ?? []).some((c) => c.name.toLowerCase() === lower) || teams.some((t) => t.name.toLowerCase() === lower);
 
-  const say = (t: string) => { setToast(t); setTimeout(() => setToast(null), 2200); };
+  const say = (t: string) => toast.success(t);
   const run = (job: () => Promise<{ error?: string; team?: { id: string; name: string }; cleared?: number; regenerated?: boolean }>, done: string, removed?: string) =>
     (async () => {
       setPending(true);
@@ -120,16 +120,6 @@ export function TeamsTab({ tournamentId, teams: serverTeams, candidates: serverC
           </div>
         </div>
       )}
-      {problem && (
-        <div className="tm-modal" onClick={() => setProblem(null)}>
-          <div className="tm-dialog" role="alertdialog" aria-label="Could not finish" onClick={(e) => e.stopPropagation()}>
-            <h2>That didn’t work</h2>
-            <p>{problem}</p>
-            <div className="tm-acts"><button type="button" className="tm-btn" onClick={() => setProblem(null)}>OK</button></div>
-          </div>
-        </div>
-      )}
-      <div className="tm-toast" role="status" aria-live="polite" style={{ opacity: toast ? 1 : 0, transform: `translate(-50%, ${toast ? 0 : 20}px)` }}>{toast && <div><i />{toast}</div>}</div>
     </div>
   );
 }

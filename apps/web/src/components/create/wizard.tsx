@@ -7,6 +7,7 @@ import { addDays, planTournament } from '@sports/sports-engine/src/tournament-pl
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
 import { addTeam, addVenue, createMatchAction, publishTournament } from '@/app/create/actions';
+import { toast } from '@/components/ratch/toast';
 
 type Mode = 'tournament' | 'match';
 interface Sport { id: string; key: string; name: string }
@@ -115,13 +116,13 @@ export function Wizard(props: Props) {
   const [visited, setVisited] = useState(0);
   const [done, setDone] = useState<Done | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const setServerError = (m: string | null) => { if (m) toast.error(m); };
 
   const [teamList, setTeamList] = useState(props.teams);
   const [venueList, setVenueList] = useState(props.venues);
   const [newTeam, setNewTeam] = useState('');
   const [newVenue, setNewVenue] = useState('');
-  const [addError, setAddError] = useState<string | null>(null);
+  const setAddError = (m: string | null) => { if (m) toast.error(m); };
 
   const [t, setT] = useState({
     name: '', sportId: cricket?.id ?? sports[0]?.id ?? '', start: '', end: '', venueIds: [] as string[],
@@ -335,7 +336,6 @@ export function Wizard(props: Props) {
           {venueList.length === 0 && <p className="cw-muted">No venues yet. Add the first one below.</p>}
           <Pills multi value={t.venueIds} onPick={(v) => setT({ ...t, venueIds: toggleIn(t.venueIds, v) })} options={venueList.map((x) => ({ v: x.id, l: x.name }))} />
           <div className="cw-add"><input className="cw-input" value={newVenue} onChange={(e) => setNewVenue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && makeVenue()} placeholder="Add a new venue" maxLength={80} /><button type="button" className="cw-btn" data-variant="gray" onClick={makeVenue} disabled={!newVenue.trim()}>ADD VENUE</button></div>
-          {addError && <p className="cw-error">{addError}</p>}
         </div>
       </>
     );
@@ -385,7 +385,6 @@ export function Wizard(props: Props) {
           })}
         </div>
         <div className="cw-add"><input className="cw-input" value={newTeam} onChange={(e) => setNewTeam(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && makeTeam()} placeholder="Add a new team" maxLength={60} /><button type="button" className="cw-btn" data-variant="gray" onClick={makeTeam} disabled={!newTeam.trim()}>ADD TEAM</button></div>
-        {addError && <p className="cw-error">{addError}</p>}
       </>
     );
     if (isT && step === 3) return (
@@ -449,7 +448,6 @@ export function Wizard(props: Props) {
           <Pills value={m.venueId} onPick={(v) => setM({ ...m, venueId: m.venueId === v ? '' : String(v) })} options={venueList.map((x) => ({ v: x.id, l: x.name }))} />
           <div className="cw-add"><input className="cw-input" value={newVenue} onChange={(e) => setNewVenue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && makeVenue()} placeholder="Add a new venue" maxLength={80} /><button type="button" className="cw-btn" data-variant="gray" onClick={makeVenue} disabled={!newVenue.trim()}>ADD VENUE</button></div>
         </div>
-        {addError && <p className="cw-error">{addError}</p>}
         <div className="cw-two">
           <Field label="DATE"><input type="date" className="cw-input" value={m.date} onChange={(e) => setM({ ...m, date: e.target.value })} /></Field>
           <Field label="START TIME"><input type="time" className="cw-input" value={m.time} onChange={(e) => setM({ ...m, time: e.target.value })} /></Field>
@@ -597,8 +595,8 @@ export function Wizard(props: Props) {
               </div>
               <div className="cw-body">{renderStep()}</div>
               <div className="cw-foot">
-                <span className="cw-hint" data-tone={err || serverError ? 'warn' : overrun && step === 3 ? 'bad' : undefined} role="status">
-                  {serverError ?? (err || (last ? 'Everything looks ready.' : overrun && step === 3 ? `Schedule runs past ${fmtD(t.end)}. Add matches per day or extend the end date.` : ''))}
+                <span className="cw-hint" data-tone={err ? 'warn' : overrun && step === 3 ? 'bad' : undefined} role="status">
+                  {err || (last ? 'Everything looks ready.' : overrun && step === 3 ? `Schedule runs past ${fmtD(t.end)}. Add matches per day or extend the end date.` : '')}
                 </span>
                 <div className="cw-nav">
                   <Link href={props.lockedTournament ? `/tournaments/${props.lockedTournament.id}` : isT ? '/tournaments' : '/matches'} className="cw-btn" data-variant="gray" aria-label="Cancel and leave without saving">CANCEL</Link>

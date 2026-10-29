@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decide, replay, type LoggedEvent, type MatchContext, type SportEvent } from './index';
-import { chipFor, cricketEngine as engine, currentInnings, type CricketState } from './cricket';
+import { canEditToss, chipFor, cricketEngine as engine, currentInnings, type CricketState } from './cricket';
 
 const squad = (p: string) => [1, 2, 3, 4].map((n) => ({ id: `${p}${n}`, name: `${p}${n}` }));
 // 4 players a side => max 3 wickets. 2-over match => 12 legal balls.
@@ -419,5 +419,65 @@ describe('free hit rule', () => {
     const { log } = playFh([...setup, ball(0, { extra: 'nb' }), ball(1)]);
     const undone = decide(engine, fhCtx, log, ev('undo'));
     expect(undone.ok && (undone.value.state as CricketState).freeHit).toBe(true);
+  });
+});
+
+describe('correcting the toss', () => {
+  const tossA = ev('toss', { winnerTeamId: 'A', decision: 'bat' });
+  const tossB = ev('toss', { winnerTeamId: 'B', decision: 'bat' });
+
+  it('can be corrected right after it is recorded, before anything else', () => {
+    const { state } = play([tossA, tossB]);
+    expect(state.toss).toEqual({ winnerTeamId: 'B', decision: 'bat' });
+    expect(state.awaiting).toBe('innings_start');
+    expect(canEditToss(state)).toBe(true);
+  });
+  it('a corrected toss decides who bats first', () => {
+    const { state } = play([tossA, ev('toss', { winnerTeamId: 'A', decision: 'bowl' }), ev('start_innings', { strikerId: 'b1', nonStrikerId: 'b2', bowlerId: 'a1' })]);
+    expect(currentInnings(state)!.battingTeamId).toBe('B');
+  });
+  it('can be corrected after the openers are picked while no ball is bowled: the innings starts again', () => {
+    const { state } = play([...setup, tossB]);
+    expect(state.innings).toHaveLength(0);
+    expect(state.toss).toEqual({ winnerTeamId: 'B', decision: 'bat' });
+    expect(state.awaiting).toBe('innings_start');
+    // Beta bat first now, so Alpha's openers are refused and Beta's are accepted
+    reject([...setup, tossB], ev('start_innings', { strikerId: 'a1', nonStrikerId: 'a2', bowlerId: 'b1' }));
+    const again = play([...setup, tossB, ev('start_innings', { strikerId: 'b1', nonStrikerId: 'b2', bowlerId: 'a1' })]);
+    expect(currentInnings(again.state)!.battingTeamId).toBe('B');
+    expect(again.state.awaiting).toBe('ball');
+  });
+  it('is refused once a ball has been bowled', () => {
+    expect(reject([...setup, ball(1)], tossB)).toMatch(/can’t be changed once scoring has started/);
+    expect(canEditToss(play([...setup, ball(0)]).state)).toBe(false);
+  });
+  it('is refused after a wide too, since it is a delivery', () => {
+    expect(reject([...setup, ball(0, { extra: 'wd' })], tossB)).toMatch(/can’t be changed/);
+  });
+  it('is refused once the first innings is over, and after the match', () => {
+    const done = [...setup, ev('end_innings')];
+    expect(play(done).state.awaiting).toBe('innings_start');
+    expect(reject(done, tossB)).toMatch(/can’t be changed/);
+    expect(reject([...done, ev('finish', { outcome: 'tie' })], tossB)).toMatch(/already complete/);
+  });
+  it('can be undone: the original toss and the started innings come back', () => {
+    const { log } = play([...setup, tossB]);
+    const d = decide(engine, ctx, log, ev('undo'));
+    expect(d.ok).toBe(true);
+    if (d.ok) log.push({ seq: log.length + 1, ...d.value.event });
+    const s = replay(engine, ctx, log) as CricketState;
+    expect(s.toss).toEqual({ winnerTeamId: 'A', decision: 'bat' });
+    expect(s.awaiting).toBe('ball');
+    expect(currentInnings(s)!.battingTeamId).toBe('A');
+  });
+  it('is not possible before a toss exists, and canEditToss says so', () => {
+    expect(canEditToss(play([]).state)).toBe(false);
+    expect(canEditToss(play([tossA]).state)).toBe(true);
+    expect(canEditToss(play(setup).state)).toBe(true);
+  });
+  it('clears a free hit carried from nothing, and the last action reads TOSS', () => {
+    const { state } = play([tossA, tossB]);
+    expect(state.freeHit).toBe(false);
+    expect(state.lastAction?.type).toBe('toss');
   });
 });

@@ -19,7 +19,7 @@ export default async function ScorePage({ params }: { params: Promise<{ id: stri
   // Role is enforced by the middleware; this adds the per-match rule (assigned scorer, finished matches).
   if (!canScoreMatch(user, card)) redirect(matchHref(card));
 
-  if (snapshot.sportKey === 'cricket') return <CricketScorer initial={snapshot} venue={card.venue} />;
+  if (snapshot.sportKey === 'cricket') return <CricketScorer initial={snapshot} venue={card.venue} backHref={matchHref(card)} />;
   return (
     <div className="mx-auto max-w-xl p-6">
       <PageHeader title="Scorer console" />

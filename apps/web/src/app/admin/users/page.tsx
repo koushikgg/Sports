@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { Avatar } from '@/components/ratch/avatar';
 import { Button, Card, Empty, Input, Label, PageHeader, Select } from '@/components/ui';
 import { inviteUser, removeUser, setUserRole } from './actions';
+import { FlashToast } from '@/components/ratch/flash-toast';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-6">
       <PageHeader title="Users" />
-      {notice && <p role="status" className="rounded-2xl bg-success/12 px-4 py-3 text-sm text-success">{notice}</p>}
-      {error && <p role="alert" className="rounded-2xl bg-live/12 px-4 py-3 text-sm text-live">{error}</p>}
+      <FlashToast notice={notice} error={error} />
 
       <Card>
         <form action={inviteUser} className="grid gap-3 sm:grid-cols-4 sm:items-end">

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { stageTitle, type FixtureParse } from '@sports/sports-engine/src/fixture-import';
 import { clearTournamentFixtures, createFixtures, previewFixtures } from '@/app/tournaments/[id]/fixtures-actions';
 import '@/components/teams/team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 async function copy(text: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through to the old way */ }
@@ -30,13 +31,12 @@ export function FixturesImport({ tournamentId, prompt, teamCount, fixtureCount, 
   const [json, setJson] = useState('');
   const [busy, setBusy] = useState<'preview' | 'create' | null>(null);
   const [parse, setParse] = useState<FixtureParse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const setError = (m: string | null) => { if (m) toast.error(m); };
   const [confirm, setConfirm] = useState<'replace' | 'clear' | null>(null);
   const tz = () => new Date().getTimezoneOffset();
 
-  const flash = (t: string) => { setNote(t); setTimeout(() => setNote(null), 2500); };
-  const onCopy = async () => flash((await copy(prompt)) ? 'Copied. Paste it into your tool.' : 'Could not copy. Select the text in the box below and copy it.');
+  const flash = (t: string) => toast.success(t);
+  const onCopy = async () => ((await copy(prompt)) ? toast.success('Copied. Paste it into your tool.') : toast.error('Could not copy. Select the text in the box below and copy it.'));
 
   const preview = async () => {
     setBusy('preview'); setError(null); setParse(null);
@@ -93,7 +93,6 @@ export function FixturesImport({ tournamentId, prompt, teamCount, fixtureCount, 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button type="button" className="tm-btn" data-v="amber" onClick={onCopy}>COPY TEAMS + FORMAT</button>
           {fixtureCount > 0 && <button type="button" className="tm-btn" disabled={busy !== null} onClick={() => setConfirm('clear')}>CLEAR {fixtureCount} FIXTURE{fixtureCount === 1 ? '' : 'S'}</button>}
-          {note && <span role="status" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{note}</span>}
         </div>
         <label style={{ display: 'grid', gap: 6 }}>
           <span className="lbl">PASTE THE JSON HERE</span>
@@ -104,7 +103,6 @@ export function FixturesImport({ tournamentId, prompt, teamCount, fixtureCount, 
           <button type="button" className="tm-btn" disabled={!json.trim() || busy !== null} onClick={preview}>{busy === 'preview' ? 'CHECKING…' : 'CHECK FIXTURES'}</button>
           {parse && <button type="button" className="tm-btn" data-v="amber" disabled={blocked || busy !== null} onClick={() => (fixtureCount > 0 ? setConfirm('replace') : create())}>{busy === 'create' ? 'SAVING…' : `${fixtureCount > 0 ? 'REPLACE WITH' : 'CREATE'} ${toCreate} FIXTURE${toCreate === 1 ? '' : 'S'}`}</button>}
         </div>
-        {error && <p role="alert" style={{ margin: 0, fontSize: 13, color: 'var(--red-text)' }}>{error}</p>}
 
         {parse && (
           <>

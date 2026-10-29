@@ -3,21 +3,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { regenerateTableFixtures } from '@/app/tournaments/[id]/fixtures-actions';
 import '@/components/teams/team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 /** Admin note on a Table tournament's Fixtures tab: the fixtures make themselves, and can be made again until play starts. */
 export function TableFixturesPanel({ tournamentId, teamCount, qualify, matchesPerTeam, fixtureCount, started }: { tournamentId: string; teamCount: number; qualify: 2 | 4; matchesPerTeam?: number; fixtureCount: number; started: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
 
   const go = async () => {
-    setBusy(true); setMsg(null);
+    setBusy(true);
     try {
       const r = await regenerateTableFixtures({ tournamentId, tzOffset: new Date().getTimezoneOffset() });
-      if (r.error) setMsg({ text: r.error, bad: true });
-      else { setMsg({ text: 'Fixtures made again.' }); router.refresh(); }
-    } catch { setMsg({ text: 'Something went wrong. Try again.', bad: true }); } finally { setBusy(false); }
+      if (r.error) toast.error(r.error);
+      else { toast.success('Fixtures made again.'); router.refresh(); }
+    } catch { toast.error('Something went wrong. Try again.'); } finally { setBusy(false); }
   };
 
   const each = matchesPerTeam ?? teamCount - 1;
@@ -32,7 +32,6 @@ export function TableFixturesPanel({ tournamentId, teamCount, qualify, matchesPe
       {!started && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button type="button" className="tm-btn" disabled={busy} onClick={() => (fixtureCount > 0 ? setAsk(true) : void go())}>{busy ? 'MAKING…' : fixtureCount > 0 ? 'MAKE THE FIXTURES AGAIN' : 'MAKE THE FIXTURES'}</button>
-          {msg && <span role="status" style={{ fontSize: 13, color: msg.bad ? 'var(--red-text)' : 'var(--text-secondary)' }}>{msg.text}</span>}
         </div>
       )}
       {ask && (

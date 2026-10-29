@@ -4,9 +4,11 @@ import '@fontsource-variable/inter-tight';
 import '@fontsource-variable/jetbrains-mono';
 import './ratch.css';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MatchSnapshot } from '@sports/shared';
 import {
+  canEditToss,
   chipFor,
   currentInnings,
   formatOvers,
@@ -34,11 +36,12 @@ import {
   surnameOf,
 } from '@sports/sports-engine/src/cricket-view';
 import { Chip } from '@/components/ratch/chip';
+import { toast, Toaster } from '@/components/ratch/toast';
 import { useScorer } from '@/lib/use-live-match';
 import { ScorerCard } from './scorer-card';
 
-type Sheet = 'extras' | '57' | 'wicket' | 'retire' | 'result';
-type Active = Sheet | 'toss' | 'openers' | 'batter' | 'bowler' | 'final';
+type Sheet = 'extras' | '57' | 'wicket' | 'retire' | 'result' | 'toss';
+type Active = Sheet | 'openers' | 'batter' | 'bowler' | 'final';
 type Credit = 'bat' | 'b' | 'lb';
 type Delivery = 'normal' | 'wd' | 'nb';
 
@@ -111,7 +114,7 @@ const Label = ({ children }: { children: React.ReactNode }) => <div className="l
 
 // ---------------------------------------------------------------------------
 
-export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venue?: string | null }) {
+export function CricketScorer({ initial, venue, backHref: backTo }: { initial: MatchSnapshot; venue?: string | null; /** The match page, so Cancel and the back arrow go straight to it (under its tournament when it has one). */ backHref?: string }) {
   const { snapshot, connected, send, release, error, busy } = useScorer(initial);
   const s = snapshot.state as CricketState;
   const inn = currentInnings(s);
@@ -133,20 +136,17 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [ackFinal, setAckFinal] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const flash = useCallback((text: string) => {
-    clearTimeout(toastTimer.current);
-    setToast(text);
-    toastTimer.current = setTimeout(() => setToast(null), 1800);
-  }, []);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const flash = useCallback((text: string) => toast.success(text), []);
+  useEffect(() => { if (error) toast.error(error); }, [error]);
 
   // ---- sheet forms
   const [ex, setEx] = useState<{ type: Extra; runs: number; nbKind: Credit }>({ type: 'wd', runs: 0, nbKind: 'bat' });
   const [fs, setFs] = useState<{ runs: number; src: Credit }>({ runs: 5, src: 'bat' });
   const [wk, setWk] = useState<{ delivery: Delivery; kind: WicketKind; who: 0 | 1; runs: number; fielder: string }>({ delivery: 'normal', kind: 'bowled', who: 0, runs: 0, fielder: '' });
   const [rt, setRt] = useState<{ who: 0 | 1; type: 'hurt' | 'out' }>({ who: 0, type: 'hurt' });
+  const router = useRouter();
+  // Cancelling the very first toss leaves the console: there is nothing to score without one, and nothing has been saved.
+  const backHref = backTo ?? `/sports/${snapshot.sportKey}/matches/${snapshot.matchId}`;
   const [toss, setToss] = useState<{ win: string; choice: 'bat' | 'bowl' }>({ win: s.teams[0]!.id, choice: 'bat' });
   const [open, setOpen] = useState<{ sel: string[]; bowler: string }>({ sel: [], bowler: '' });
   const [res, setRes] = useState<string>('tie');
@@ -155,8 +155,10 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
   useEffect(() => { setOpen({ sel: [], bowler: '' }); }, [s.innings.length]);
 
   // The engine says what it needs next; those prompts cannot be dismissed.
+  // (while the toss is being corrected, the toss sheet stands in front of the openers prompt)
   const forced: Active | null =
-    s.awaiting === 'toss' ? 'toss'
+    sheet === 'toss' ? null
+    : s.awaiting === 'toss' ? 'toss'
     : s.awaiting === 'innings_start' ? 'openers'
     : s.awaiting === 'batter' ? 'batter'
     : s.awaiting === 'bowler' ? 'bowler'
@@ -184,6 +186,15 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
 
   const undo = () => { if (canUndo) void run('undo', {}, `${s.lastAction!.label} removed`); };
   const swap = () => { if (canScore) void run('swap_strike', {}, 'Strike swapped'); };
+
+  /** Fix a wrong toss until the first ball. If the openers were already picked they are cleared and chosen again. */
+  const startEditToss = () => {
+    if (!s.toss || !canEditToss(s)) return;
+    if (s.innings.length > 0 && !confirm('Changing the toss clears the openers you picked. You will pick them again. Continue?')) return;
+    setToss({ win: s.toss.winnerTeamId, choice: s.toss.decision });
+    setSheet('toss');
+    setDrawer(false);
+  };
 
   const openSheet = (kind: Sheet, preset?: () => void) => { preset?.(); setSheet(kind); setDrawer(false); };
   const openExtras = (type: Extra) => openSheet('extras', () => setEx({ type, runs: type === 'b' || type === 'lb' ? 1 : 0, nbKind: 'bat' }));
@@ -303,7 +314,9 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
     wicket: { kicker: 'WICKET', title: 'How was the batter out?', w: 600, primary: 'RECORD WICKET', variant: 'danger', secondary: 'CANCEL', closable: true },
     retire: { kicker: 'RETIRE', title: 'Retire a batter', w: 520, primary: 'CONFIRM', secondary: 'CANCEL', closable: true },
     result: { kicker: 'END OF MATCH', title: 'End the match', w: 560, primary: 'PUBLISH RESULT', secondary: 'BACK TO SCORING', closable: true },
-    toss: { kicker: 'BEFORE THE MATCH', title: 'Toss', w: 560, primary: 'CONTINUE', closable: false },
+    toss: sheet === 'toss'
+      ? { kicker: 'CORRECT THE TOSS', title: 'Edit toss', w: 560, primary: 'SAVE TOSS', secondary: 'CANCEL', closable: true }
+      : { kicker: 'BEFORE THE MATCH', title: 'Toss', w: 560, primary: 'CONTINUE', secondary: 'CANCEL', closable: false },
     openers: { kicker: `INNINGS ${s.innings.length + 1} · ${nextBat ? teamName(nextBat).toUpperCase() : ''}`, title: 'Select openers', w: 720, primary: 'START INNINGS', closable: false },
     batter: { kicker: s.lastAction?.type === 'retire' ? 'BATTER RETIRED' : 'WICKET FELL', title: 'Who is the new batter?', w: 560, secondary: 'UNDO', closable: false },
     bowler: { kicker: `OVER ${lastOver?.no ?? Math.max(1, Math.floor((inn?.legalBalls ?? 0) / 6))} COMPLETE · ${lastOver?.runs ?? 0} RUNS`, title: 'Who bowls next?', w: 560, secondary: 'UNDO', closable: false },
@@ -322,7 +335,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
         if (id) void run('retire', { playerId: id, kind: rt.type === 'hurt' ? 'retired_hurt' : 'retired_out' }, 'Batter retired');
         return;
       }
-      case 'toss': return void run('toss', { winnerTeamId: toss.win, decision: toss.choice }, 'Toss recorded');
+      case 'toss': return void run('toss', { winnerTeamId: toss.win, decision: toss.choice }, sheet === 'toss' ? 'Toss corrected' : 'Toss recorded');
       case 'openers': return void run('start_innings', { strikerId: pickS, nonStrikerId: pickN, bowlerId: openBowler }, 'Innings started');
       case 'result': {
         const body = res === 'tie' ? { outcome: 'tie' } : res === 'nr' ? { outcome: 'no_result' } : { outcome: 'win', winnerTeamId: res.replace('win:', '') };
@@ -333,6 +346,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
   };
   const secondary = () => {
     if (shown === 'batter' || shown === 'bowler' || shown === 'final') return undo();
+    if (shown === 'toss' && forced === 'toss') return router.push(backHref);
     setSheet(null);
   };
 
@@ -343,7 +357,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
     <div className="ratch sc-root" data-theme="dark">
       <div className="sc-top">
         <div className="sc-brand">
-          <Link href={`/sports/${snapshot.sportKey}/matches/${snapshot.matchId}`} aria-label="Back to match" className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 16, marginRight: 4 }}>←</Link>
+          <Link href={backHref} aria-label="Back to match" className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 16, marginRight: 4 }}>←</Link>
           <span className="sc-brand-dot" />
           <span className="sc-brand-name">Ratchet</span>
           <span className="sc-tag">SCORER</span>
@@ -354,6 +368,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
           <span className="lbl" style={{ letterSpacing: '0.04em' }}>
             {s.overs} OVERS · {inn ? `INNINGS ${s.innings.length}` : 'NOT STARTED'}{venue ? ` · ${venue.toUpperCase()}` : ''}
           </span>
+          {canEditToss(s) && s.awaiting === 'ball' && <button type="button" className="sc-textbtn" onClick={startEditToss}>Wrong toss? Edit it</button>}
         </div>
         <div className="sc-conn" data-state={conn} role="status">
           <i />
@@ -372,11 +387,6 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
         <div className="sc-banner" role="alert">
           <span>Offline. Scoring is paused until the connection returns. Nothing is saved on this device.</span>
           <span className="mono" style={{ fontSize: 11, fontWeight: 700 }}>RECONNECTING</span>
-        </div>
-      )}
-      {error && (
-        <div className="sc-banner" data-tone="error" role="alert">
-          <span>{error}</span>
         </div>
       )}
 
@@ -527,9 +537,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
         </div>
       )}
 
-      <div className="sc-toast" data-show={on(!!toast)} role="status" aria-live="polite">
-        <div><i />{toast ?? ''}</div>
-      </div>
+      <Toaster />
 
       {/* modal sheets */}
       <div className="sc-scrim" data-open={on(!!active)} onClick={() => { if (sheet && !forced) setSheet(null); }}>
@@ -540,6 +548,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
               <div className="sc-sheet-title">{m.title}</div>
             </div>
             {m.closable && !forced && <button className="sc-x" aria-label="Close" onClick={() => setSheet(null)}>×</button>}
+            {shown === 'toss' && forced === 'toss' && <button className="sc-x" aria-label="Cancel and go back to the match" onClick={() => router.push(backHref)}>×</button>}
             {shown === 'final' && <button className="sc-x" aria-label="Close" onClick={() => setAckFinal(true)}>×</button>}
           </div>
 
@@ -672,12 +681,14 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
                 ))}
               </div>
               <div className="sc-amberline">{tossWinnerName} won the toss and chose to {toss.choice} first.</div>
+              {sheet === 'toss' && s.innings.length > 0 && <div className="sc-note">You already picked the openers. Saving a new toss clears them, and you pick them again.</div>}
             </>
           )}
 
           {shown === 'openers' && nextBat && (
             <>
               <div className="sc-note">Tap the striker first, then the non-striker.</div>
+              {canEditToss(s) && <button type="button" className="sc-textbtn" onClick={startEditToss}>Wrong toss? Edit it</button>}
               <div className="sc-openers">
                 {squad(nextBat).map((p) => {
                   const k = open.sel.indexOf(p.id);
@@ -795,6 +806,7 @@ export function CricketScorer({ initial, venue }: { initial: MatchSnapshot; venu
           <button className="sc-x" aria-label="Close" onClick={() => setDrawer(false)} tabIndex={drawer ? 0 : -1}>×</button>
         </div>
         {([
+          { l: 'Edit toss', d: 'Fix the toss before the first ball', fn: startEditToss, off: !canEditToss(s) || busy },
           { l: 'Retire batter', d: 'Hurt or retired out', fn: () => openSheet('retire', () => setRt({ who: 0, type: 'hurt' })), off: !canScore },
           { l: 'Penalty runs', d: 'Award 5 to the batting side', fn: () => void run('penalty', { runs: 5 }, '5 penalty runs awarded'), off: !(inn && !inn.closed && connected && !busy) },
           { l: 'End innings', d: 'Declare or close the innings now', fn: () => { if (confirm('End this innings now?')) void run('end_innings', {}, 'Innings ended'); }, off: !(inn && !inn.closed && connected && !busy) },

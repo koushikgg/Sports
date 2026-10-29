@@ -130,6 +130,17 @@ export function battingFirstId(s: CricketState): string | null {
   return decision === 'bat' ? winnerTeamId : otherTeam(s, winnerTeamId);
 }
 
+/**
+ * The toss can be corrected until scoring begins: before any innings, or while the first innings has no ball in it
+ * (its openers were only just picked). Once a delivery is recorded the toss is part of the match.
+ */
+export function canEditToss(s: CricketState): boolean {
+  if (!s.toss || s.result) return false;
+  if (s.innings.length === 0) return true;
+  const first = s.innings[0]!;
+  return s.innings.length === 1 && !first.closed && first.log.length === 0;
+}
+
 function deriveAwaiting(s: CricketState): Awaiting {
   if (s.result) return 'complete';
   if (!s.toss) return 'toss';
@@ -205,7 +216,7 @@ function validate(s: CricketState, event: SportEvent): Result {
 
   switch (event.type as EventType) {
     case 'toss': {
-      if (s.awaiting !== 'toss') return fail('Toss already done');
+      if (s.awaiting !== 'toss' && !canEditToss(s)) return fail(s.result ? 'The match is over' : 'The toss can’t be changed once scoring has started');
       if (!s.teams.some((t) => t.id === p.winnerTeamId)) return fail('Unknown team');
       for (const t of s.teams) {
         if ((s.squads[t.id]?.length ?? 0) < 2) return fail(`${t.name} needs at least 2 players in its roster`);
@@ -444,6 +455,9 @@ function apply(prev: CricketState, event: SportEvent): CricketState {
   switch (event.type as EventType) {
     case 'toss':
       s.toss = schemas.toss.parse(event.payload);
+      // a corrected toss may change who bats first, so an innings that only has openers is dropped to be picked again
+      if (s.innings.length === 1 && s.innings[0]!.log.length === 0) s.innings = [];
+      s.freeHit = false;
       break;
 
     case 'start_innings': {

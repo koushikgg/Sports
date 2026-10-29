@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { addTournamentManager, removeTournamentManager } from '@/app/tournaments/[id]/manager-actions';
 import { Avatar } from '@/components/ratch/avatar';
 import '@/components/teams/team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 interface Hit { id: string; name: string; sub: string }
 
@@ -17,8 +18,7 @@ export function ManagersTab({ tournamentId, managers: serverManagers, isAdmin }:
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ id: string; name: string } | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const setProblem = (m: string | null) => { if (m) toast.error(m); };
   const term = q.trim();
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function ManagersTab({ tournamentId, managers: serverManagers, isAdmin }:
     return () => { clearTimeout(t); ctl.abort(); };
   }, [term, tournamentId, isAdmin, managers]);
 
-  const say = (t: string) => { setToast(t); setTimeout(() => setToast(null), 2200); };
+  const say = (t: string) => toast.success(t);
   const add = async (h: Hit) => {
     setBusy(true); setQ(''); setHits(null);
     try {
@@ -102,15 +102,6 @@ export function ManagersTab({ tournamentId, managers: serverManagers, isAdmin }:
           </div>
         </div>
       )}
-      {problem && (
-        <div className="tm-modal" onClick={() => setProblem(null)}>
-          <div className="tm-dialog" role="alertdialog" aria-label="Could not finish" onClick={(e) => e.stopPropagation()}>
-            <h2>That didn’t work</h2><p>{problem}</p>
-            <div className="tm-acts"><button type="button" className="tm-btn" onClick={() => setProblem(null)}>OK</button></div>
-          </div>
-        </div>
-      )}
-      <div className="tm-toast" role="status" aria-live="polite" style={{ opacity: toast ? 1 : 0, transform: `translate(-50%, ${toast ? 0 : 20}px)` }}>{toast && <div><i />{toast}</div>}</div>
     </div>
   );
 }

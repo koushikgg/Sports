@@ -1,0 +1,14 @@
+/* Toasts: bottom centre, above every dialog (dialogs sit at z-index 40). */
+.rx-toasts { position: fixed; left: 50%; bottom: 24px; z-index: 90; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.rx-toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 16px; border-radius: 16px; box-shadow: 0 12px 34px rgba(0, 0, 0, .5); font-family: var(--font-sans, 'Inter Variable', Inter, sans-serif); font-size: 14px; line-height: 1.45; animation: rx-toast-in 220ms var(--ease-out, cubic-bezier(.25, 1, .5, 1)); }
+.rx-toast span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.rx-toast i { flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; }
+.rx-toast button { flex: none; width: 26px; height: 26px; margin: -2px -2px -2px 0; border: none; border-radius: 50%; background: transparent; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .65; }
+.rx-toast button:hover { opacity: 1; background: rgba(255, 255, 255, .12); }
+.rx-toast[data-kind='success'] { background: #f4f5f7; color: #101828; }
+.rx-toast[data-kind='success'] i { background: var(--green, #34c759); }
+.rx-toast[data-kind='success'] button:hover { background: rgba(0, 0, 0, .08); }
+.rx-toast[data-kind='error'] { background: #3a1517; color: #ffd9da; box-shadow: 0 12px 34px rgba(0, 0, 0, .55), inset 4px 0 0 var(--red, #ff383c); }
+.rx-toast[data-kind='error'] i { background: var(--red, #ff383c); }
+@keyframes rx-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rx-toast { animation: none; } }

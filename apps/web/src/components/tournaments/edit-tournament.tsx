@@ -5,6 +5,7 @@ import { FIXTURE_TYPES, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTe
 import { addVenue } from '@/app/create/actions';
 import { updateTournament } from '@/app/tournaments/[id]/actions';
 import '@/components/teams/team-manage.css';
+import { toast } from '@/components/ratch/toast';
 
 type Tie = TournamentMeta['tiebreak'];
 const pill = (on: boolean, off?: boolean): React.CSSProperties => ({ background: on ? '#f4f5f7' : undefined, color: on ? '#0d0e11' : undefined, opacity: off ? 0.45 : 1 });
@@ -26,8 +27,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
   const [venues, setVenues] = useState(allVenues);
   const [newVenue, setNewVenue] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const setError = (m: string | null) => { if (m) toast.error(m); };
 
   const set = <K extends keyof ReturnType<typeof init>>(k: K, v: ReturnType<typeof init>[K]) => setF((x) => ({ ...x, [k]: v }));
   const table = f.formatKey === 'lk';
@@ -62,8 +62,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
       });
       if (r.error) { setError(r.error); return; }
       setOpen(false);
-      setToast(r.regenerated ? 'Saved. Fixtures made again.' : r.cleared ? `Saved. ${r.cleared} fixture${r.cleared === 1 ? '' : 's'} removed, create them again.` : 'Tournament saved.');
-      setTimeout(() => setToast(null), 3000);
+      toast.success(r.regenerated ? 'Saved. Fixtures made again.' : r.cleared ? `Saved. ${r.cleared} fixture${r.cleared === 1 ? '' : 's'} removed, create them again.` : 'Tournament saved.');
       router.refresh();
     } catch { setError('Something went wrong. Try again.'); } finally { setBusy(false); }
   };
@@ -71,7 +70,6 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
   return (
     <>
       <button type="button" className="mx-btn mx-btn-lg" data-variant="gray" onClick={() => { setF(init()); setVenues(allVenues); setError(null); setOpen(true); }}>EDIT TOURNAMENT</button>
-      {toast && <div className="tm-toast" role="status" style={{ opacity: 1, transform: 'translate(-50%, 0)' }}><div><i />{toast}</div></div>}
       {open && (
         <div className="tm-modal" onClick={() => setOpen(false)}>
           <form className="tm-dialog" role="dialog" aria-label="Edit tournament" style={{ maxWidth: 600, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(); }}>
@@ -148,7 +146,6 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
             </label>
             <p>These settings drive the standings and the planned match count. Fixtures keep their own dates, so changing the dates or venues here does not move them.</p>
 
-            {error && <p role="alert" style={{ color: 'var(--red-text)' }}>{error}</p>}
             <div className="tm-acts">
               <button type="button" className="tm-btn" onClick={() => setOpen(false)}>CANCEL</button>
               <button type="submit" className="tm-btn" data-v={clears || remakes ? 'danger' : 'amber'} disabled={busy || !f.name.trim() || f.venueIds.length === 0 || tooFew}>{busy ? 'SAVING…' : clears ? 'SAVE + REMOVE FIXTURES' : remakes ? 'SAVE + MAKE FIXTURES AGAIN' : 'SAVE'}</button>
