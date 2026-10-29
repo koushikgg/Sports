@@ -19,12 +19,14 @@ import {
   tournaments,
   type Reader,
 } from '@sports/db';
-import { FORMATS, type Ack, type FormatKey, type MatchSnapshot, type MatchUpdate, type Role, type ScoreEventInput, type ScoreSummary, type SportKey, type TournamentMeta } from '@sports/shared';
+import { FORMATS, type Ack, type BracketFixture, type FixtureSlot, type FormatKey, type MatchSnapshot, type MatchUpdate, type Role, type ScoreEventInput, type ScoreSummary, type SportKey, type TournamentMeta } from '@sports/shared';
 import { formatOvers, type CricketState } from '@sports/sports-engine/src/cricket';
 import { matchTeamStats } from '@sports/sports-engine/src/cricket-view';
+import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
+import { isMatchRef, slotLabel } from '@sports/sports-engine/src/fixture-import';
 import { computeCricketBoards, type Board, type BoardRow, type LeaderMatch } from '@sports/sports-engine/src/leaders';
 import { computeStandings, type FinishedMatch, type Standing } from '@sports/sports-engine/src/standings';
-import { projectKnockout, projectLeagueKnockout, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
+import { projectKnockout, projectLeagueKnockout, toInstant, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
 import {
   decide,
   decideOnState,
@@ -276,6 +278,8 @@ export interface MatchCardData {
   /** The scorer the organiser assigned, if any. */
   assignedScorerId: string | null;
   visibility: 'public' | 'link' | 'private';
+  /** Round label from an imported fixture, e.g. "Match 3" or "Group A · Match 1". */
+  round: string | null;
   summary: ScoreSummary;
 }
 
@@ -369,6 +373,7 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
       tournamentId: r.match.tournamentId,
       assignedScorerId: r.match.assignedScorerId,
       visibility: r.match.visibility as MatchCardData['visibility'],
+      round: ((r.match.meta as { round?: unknown } | null)?.round as string | undefined) ?? null,
       summary: engine.summary(state, ctx),
     };
   });
@@ -486,7 +491,183 @@ export interface StandingRow extends Standing {
   short: string | null;
 }
 
+/** An imported fixture that is not a match yet: a knockout slot waiting on a result, or a sport that has no scoring yet. */
+export interface PendingFixture {
+  no: number;
+  round: string | null;
+  date: string;
+  time: string;
+  venue: string | null;
+  labelA: string;
+  labelB: string;
+  /** Which sides are still "Winner of Match N". */
+  openA: boolean;
+  openB: boolean;
+}
+
+/** Sports whose matches can be created and scored. Others keep their imported fixtures as a schedule only. */
+const SCORED_SPORTS = new Set(['cricket']);
+
+const slotText = (s: FixtureSlot) => slotLabel(s);
+
+/** Fixture numbers of the knockout stage (any side that is not a plain team). Their results do not count in the league table. */
+const knockoutNos = (meta: TournamentMeta | null | undefined) => new Set((meta?.bracket ?? []).filter((f) => f.a.kind !== 'team' || f.b.kind !== 'team').map((f) => f.no));
+
+/** Completed matches as the standings maths wants them. */
+function toFinished(rows: { match: { teamAId: string; teamBId: string; result: unknown }; state: unknown }[]): FinishedMatch[] {
+  return rows.map(({ match, state }) => {
+    const result = match.result as { winnerTeamId?: string; text?: string } | null;
+    const winner = result?.winnerTeamId ?? null;
+    const cs = state as CricketState | null;
+    return {
+      teamAId: match.teamAId,
+      teamBId: match.teamBId,
+      winnerTeamId: winner,
+      outcome: winner ? 'win' : /tie/i.test(String(result?.text ?? '')) ? 'tie' : 'no_result',
+      stats: cs?.kind === 'cricket' ? (matchTeamStats(cs) ?? undefined) : undefined,
+    };
+  });
+}
+
+/**
+ * Turns imported bracket fixtures into real matches once both of their teams are known: a slot with a team is known
+ * at once, "Winner of Match N" once that match has a winner. Safe to call any time and from several places; a
+ * fixture number can only become one match. Returns how many matches it created.
+ */
+export async function advanceBracket(tournamentId: string): Promise<number> {
+  const db = getDb();
+  const [row] = await db
+    .select({ t: tournaments, sportId: sports.id, sportKey: sports.key })
+    .from(tournaments)
+    .innerJoin(sports, eq(sports.id, tournaments.sportId))
+    .where(eq(tournaments.id, tournamentId))
+    .limit(1);
+  const meta = row?.t.meta as unknown as TournamentMeta | undefined;
+  if (!row || !meta?.bracket?.length || !SCORED_SPORTS.has(row.sportKey)) return 0;
+
+  const bracket = meta.bracket;
+  const open = bracket.filter((f) => !f.matchId);
+  if (open.length === 0) return 0;
+
+  const made = bracket.filter((f) => f.matchId).map((f) => f.matchId!);
+  const results = made.length ? await db.select({ id: matches.id, status: matches.status, a: matches.teamAId, b: matches.teamBId, result: matches.result }).from(matches).where(inArray(matches.id, made)) : [];
+  const outcome = new Map<number, { winner: string; loser: string }>();
+  for (const f of bracket) {
+    const m = f.matchId ? results.find((x) => x.id === f.matchId) : undefined;
+    const winner = (m?.result as { winnerTeamId?: string | null } | null)?.winnerTeamId;
+    if (m && m.status === 'completed' && winner) outcome.set(f.no, { winner, loser: winner === m.a ? m.b : m.a });
+  }
+  // Table positions are known once every league match is done. The knockout stage does not count in the table.
+  const leagueFixtures = bracket.filter((f) => f.a.kind === 'team' && f.b.kind === 'team');
+  const leagueDone = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.matchId && results.find((x) => x.id === f.matchId)?.status === 'completed');
+  let table: string[] | null = null;
+  if (leagueDone && open.some((f) => f.a.kind === 'rank' || f.b.kind === 'rank')) {
+    const ko = knockoutNos(meta);
+    const rows = await db
+      .select({ match: matches, state: matchStates.state })
+      .from(matches)
+      .leftJoin(matchStates, eq(matchStates.matchId, matches.id))
+      .where(and(eq(matches.tournamentId, tournamentId), eq(matches.status, 'completed')));
+    const league = rows.filter(({ match }) => !ko.has(Number((match.meta as { fixtureNo?: unknown } | null)?.fixtureNo)));
+    table = computeStandings(meta.teams.map((t) => t.id), toFinished(league), meta.points ?? DEFAULT_POINTS, meta.tiebreak ?? 'NRR').map((x) => x.teamId);
+  }
+  const teamOf = (s: FixtureSlot): string | null => (s.kind === 'team' ? s.id : s.kind === 'rank' ? (table?.[s.pos - 1] ?? null) : (outcome.get(s.match)?.[s.kind] ?? null));
+
+  const overs = meta.overs ?? 20;
+  let created = 0;
+  const next: BracketFixture[] = bracket.map((f) => ({ ...f }));
+  for (const f of next) {
+    if (f.matchId) continue;
+    const a = teamOf(f.a), b = teamOf(f.b);
+    if (!a || !b || a === b) continue;
+    const [m] = await db
+      .insert(matches)
+      .values({
+        sportId: row.sportId, tournamentId, teamAId: a, teamBId: b, venue: f.venue, scheduledAt: toInstant(f.date, f.time, f.tz),
+        config: { overs, ballsPerOver: 6, powerplayOvers: Math.min(6, overs), playersPerSide: 11, maxOversPerBowler: Math.ceil(overs / 5), freeHit: true, wideReball: true, superOver: true, dls: false },
+        visibility: 'public', meta: { ...(f.round ? { round: f.round } : {}), fixtureNo: f.no, source: meta.formatKey === 'lk' ? 'table' : 'fixture-import' },
+      })
+      .onConflictDoNothing()
+      .returning({ id: matches.id });
+    if (m) { f.matchId = m.id; created++; continue; }
+    // another request made it first: link to that one
+    const [have] = await db.select({ id: matches.id }).from(matches).where(and(eq(matches.tournamentId, tournamentId), sql`${matches.meta}->>'fixtureNo' = ${String(f.no)}`)).limit(1);
+    if (have) f.matchId = have.id;
+  }
+  if (next.some((f, i) => f.matchId !== bracket[i]!.matchId)) {
+    // merge by fixture number into the freshest copy, so two writers never undo each other
+    const [fresh] = await db.select({ meta: tournaments.meta }).from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1);
+    const cur = fresh!.meta as unknown as TournamentMeta;
+    const merged = (cur.bracket ?? []).map((f) => ({ ...f, matchId: f.matchId ?? next.find((n) => n.no === f.no)?.matchId ?? null }));
+    await db.update(tournaments).set({ meta: { ...cur, bracket: merged } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));
+  }
+  return created;
+}
+
+/**
+ * Makes the fixtures of a Table tournament from its teams and settings, replacing whatever fixtures it had.
+ * Other types just have their fixtures cleared (the organiser builds or pastes them). Nothing happens once the
+ * tournament has started. Returns how many fixtures were removed and how many matches were made right away.
+ */
+export async function rebuildFixtures(tournamentId: string): Promise<{ removed: number; generated: number; locked: boolean }> {
+  if (await tournamentStarted(tournamentId)) return { removed: 0, generated: 0, locked: true };
+  const removed = await clearFixtures(tournamentId);
+  const db = getDb();
+  const [row] = await db
+    .select({ t: tournaments, sportKey: sports.key })
+    .from(tournaments)
+    .innerJoin(sports, eq(sports.id, tournaments.sportId))
+    .where(eq(tournaments.id, tournamentId))
+    .limit(1);
+  const meta = row?.t.meta as unknown as TournamentMeta | undefined;
+  if (!row || !meta?.teams?.length || meta.formatKey !== 'lk') return { removed, generated: 0, locked: false };
+
+  const bracket = generateTableFixtures({
+    teams: meta.teams, qualify: meta.qualify, startDate: meta.schedule.startDate, perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime,
+    restDay: meta.schedule.restDay, gapMinutes: gapMinutesFor(row.sportKey, meta.overs), venues: (meta.venues ?? []).map((v) => v.name), tz: meta.tz ?? 0,
+  });
+  await db.update(tournaments).set({ meta: { ...meta, bracket, fixturesGenerated: bracket.length > 0 } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));
+  return { removed, generated: await advanceBracket(tournamentId), locked: false };
+}
+
+/** A tournament has started once any of its matches is live or finished, or has a ball scored. */
+export async function tournamentStarted(tournamentId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(matches)
+    .where(and(eq(matches.tournamentId, tournamentId), sql`(${matches.status} <> 'scheduled' or ${matches.lastSeq} > 0)`));
+  return Number(row?.n ?? 0) > 0;
+}
+
+/**
+ * Removes every fixture of a tournament that has not started: its scheduled matches and the imported bracket (with the
+ * byes). Teams, venues and rules stay. Callers check `tournamentStarted` first. Returns how many fixtures went.
+ */
+export async function clearFixtures(tournamentId: string): Promise<number> {
+  const db = getDb();
+  const deleted = await db
+    .delete(matches)
+    .where(and(eq(matches.tournamentId, tournamentId), eq(matches.status, 'scheduled'), eq(matches.lastSeq, 0)))
+    .returning({ id: matches.id });
+  const [row] = await db.select({ meta: tournaments.meta }).from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1);
+  const meta = row?.meta as unknown as TournamentMeta | undefined;
+  const waiting = (meta?.bracket ?? []).filter((f) => !f.matchId).length;
+  if (meta && (meta.bracket || meta.byes || meta.fixturesGenerated)) {
+    const { bracket: _b, byes: _y, ...rest } = meta;
+    await db.update(tournaments).set({ meta: { ...rest, fixturesGenerated: false } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));
+  }
+  return deleted.length + waiting;
+}
+
 export interface TournamentDetail extends TournamentSummary {
+  /** Fixtures right now: scheduled matches plus imported ones waiting on a result. */
+  fixtureCount: number;
+  /** Once true, fixtures and teams are locked in. */
+  started: boolean;
+  /** Imported fixtures that are not matches yet, in the order played. */
+  pending: PendingFixture[];
+  /** Teams that skip the first round. */
+  byes: string[];
   meta: TournamentMeta | null;
   standings: StandingRow[];
   /** The tournament's matches (fixtures made through the match wizard), with scores. */
@@ -570,7 +751,14 @@ export async function getTournamentDetail(id: string, signedIn = false): Promise
     .limit(1);
   if (!row) return null;
 
-  const meta = (row.t.meta as unknown as TournamentMeta) ?? null;
+  let meta = (row.t.meta as unknown as TournamentMeta) ?? null;
+  // winners decided since the last visit open the next knockout matches
+  // (read it again either way: a request running at the same moment may have made the match first)
+  if (meta?.bracket?.some((f) => !f.matchId) && SCORED_SPORTS.has(row.sportKey)) {
+    await advanceBracket(id);
+    const [again] = await db.select({ meta: tournaments.meta }).from(tournaments).where(eq(tournaments.id, id)).limit(1);
+    meta = (again?.meta as unknown as TournamentMeta) ?? meta;
+  }
   const teamIds = (meta?.teams ?? []).map((t) => t.id);
 
   const [cards, teamRows, finishedRows] = await Promise.all([
@@ -584,18 +772,8 @@ export async function getTournamentDetail(id: string, signedIn = false): Promise
       .orderBy(asc(matches.scheduledAt), asc(matches.createdAt)),
   ]);
 
-  const finished: FinishedMatch[] = finishedRows.map(({ match, state }) => {
-    const winner = (match.result?.winnerTeamId as string | undefined) ?? null;
-    const text = String(match.result?.text ?? '');
-    const cs = state as CricketState | null;
-    return {
-      teamAId: match.teamAId,
-      teamBId: match.teamBId,
-      winnerTeamId: winner,
-      outcome: winner ? 'win' : /tie/i.test(text) ? 'tie' : 'no_result',
-      stats: cs?.kind === 'cricket' ? (matchTeamStats(cs) ?? undefined) : undefined,
-    };
-  });
+  const ko = knockoutNos(meta);
+  const finished = toFinished(finishedRows.filter(({ match }) => !ko.has(Number((match.meta as { fixtureNo?: unknown } | null)?.fixtureNo))));
 
   const points = meta?.points ?? DEFAULT_POINTS;
   const tiebreak = meta?.tiebreak ?? 'NRR';
@@ -617,9 +795,18 @@ export async function getTournamentDetail(id: string, signedIn = false): Promise
     : summary.formatKey === 'league' ? []
     : projectLeagueKnockout(qualify);
 
+  const pending: PendingFixture[] = (meta?.bracket ?? [])
+    .filter((f) => !f.matchId)
+    .sort((x, y) => `${x.date} ${x.time}`.localeCompare(`${y.date} ${y.time}`) || x.no - y.no)
+    .map((f) => ({ no: f.no, round: f.round, date: f.date, time: f.time, venue: f.venue, labelA: slotText(f.a), labelB: slotText(f.b), openA: f.a.kind !== 'team', openB: f.b.kind !== 'team' }));
+
   return {
     ...summary,
     meta,
+    pending,
+    fixtureCount: cards.length + pending.length,
+    started: await tournamentStarted(id),
+    byes: (meta?.byes ?? []).map((b) => b.name),
     standings,
     matches: cards,
     boards: row.sportKey === 'cricket' ? await getTournamentLeaderboards(id) : null,

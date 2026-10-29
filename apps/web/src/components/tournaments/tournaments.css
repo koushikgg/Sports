@@ -61,6 +61,8 @@
 .tn-a { text-align: right; }
 .tn-fx b[data-dim='true'] { color: var(--text-tertiary); font-weight: 500; }
 .tn-st { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--amber); }
+.tn-st { flex-wrap: wrap; row-gap: 2px; }
+.tn-round { flex-basis: 100%; font-size: 9px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tn-st i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .tn-st[data-g='live'] { color: var(--red-text); }
 .tn-st[data-g='ft'] { color: var(--text-tertiary); }

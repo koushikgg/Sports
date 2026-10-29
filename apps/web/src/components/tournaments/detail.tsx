@@ -4,6 +4,10 @@ import { useMemo, useState } from 'react';
 import type { TournamentDetail } from '@sports/scoring';
 import { minTeamsFor } from '@sports/shared';
 import { Leaderboards } from './leaderboards';
+import { STAGES, stageTitle } from '@sports/sports-engine/src/fixture-import';
+import { EditTournament } from './edit-tournament';
+import { FixturesImport } from './fixtures-import';
+import { TableFixturesPanel } from './table-fixtures-panel';
 import { TeamsTab } from './teams-tab';
 import { sportColor, statusGroup } from '@/components/matches/model';
 import { useHydrated } from '@/components/matches/time';
@@ -13,7 +17,7 @@ type Tab = 'standings' | 'fixtures' | 'teams' | 'bracket' | 'leaders';
 const TABS: [string, Tab][] = [['STANDINGS', 'standings'], ['FIXTURES', 'fixtures'], ['TEAMS', 'teams'], ['BRACKET', 'bracket'], ['LEADERS', 'leaders']];
 const dateLabel = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase() : '—');
 
-export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetail; isAdmin: boolean; /** Admin only: teams that can still be added. */ candidates?: { id: string; name: string }[] }) {
+export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues }: { t: TournamentDetail; isAdmin: boolean; /** Admin only: teams that can still be added. */ candidates?: { id: string; name: string }[]; /** Admin only: the text the fixture JSON import asks them to copy. */ fixturePrompt?: string; /** Admin only: every venue, for the editor. */ venues?: { id: string; name: string }[] }) {
   const hasBracket = !!t.bracket;
   const [tab, setTab] = useState<Tab>('standings');
   const [hover, setHover] = useState<number | null>(null);
@@ -32,16 +36,25 @@ export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetai
     ['DATES', ready ? `${dateLabel(t.startsAt)} – ${dateLabel(t.endsAt)}` : '—'],
   ];
 
-  // fixtures grouped by local day, oldest first
+  // Fixtures are grouped by stage (Round 1, Semi-finals, Final) when they carry stage names, and by local day otherwise,
+  // oldest first. A Table tournament shows its league rounds, then Semi-finals and the Final, each under its own heading.
+  // Imported fixtures still waiting on a result sit alongside real matches.
+  type Item = { at: string; m?: (typeof t.matches)[number]; p?: (typeof t.pending)[number] };
+  const stageLike = (r: string | null | undefined): r is string => !!r && ((STAGES as readonly string[]).includes(r) || /^Round \d+$/i.test(r));
+  const dayText = (at: string) => (at === '9999' ? 'DATE TO BE CONFIRMED' : new Date(at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase());
+  const roundOf = (it: Item) => it.m?.round ?? it.p?.round ?? null;
   const days = useMemo(() => {
-    const sorted = [...t.matches].sort((a, b) => (a.scheduledAt ?? '9999').localeCompare(b.scheduledAt ?? '9999'));
-    const map = new Map<string, typeof sorted>();
-    for (const m of sorted) {
-      const key = m.scheduledAt ? new Date(m.scheduledAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase() : 'DATE TO BE CONFIRMED';
-      map.set(key, [...(map.get(key) ?? []), m]);
+    const items: Item[] = [
+      ...t.matches.map((m) => ({ at: m.scheduledAt ?? '9999', m })),
+      ...t.pending.map((p) => ({ at: new Date(`${p.date}T${p.time}:00`).toISOString(), p })),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+    const map = new Map<string, Item[]>();
+    for (const it of items) {
+      const key = stageLike(roundOf(it)) ? `s:${roundOf(it)}` : `d:${dayText(it.at)}`;
+      map.set(key, [...(map.get(key) ?? []), it]);
     }
-    return [...map];
-  }, [t.matches]);
+    return [...map]; // groups come out in the order they are first played
+  }, [t.matches, t.pending]);
 
   return (
     <section className="tn-detail" aria-label={`${t.name} details`} style={{ ['--tn' as string]: color }}>
@@ -52,7 +65,8 @@ export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetai
             <h2>{t.name}</h2>
           </div>
           <div className="tn-actions">
-            {isAdmin && cricket && <Link href={`/tournaments/${t.id}/create`} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
+            {isAdmin && t.meta && venues && <EditTournament id={t.id} name={t.name} meta={t.meta} cricket={cricket} venues={venues} started={t.started} fixtureCount={t.fixtureCount} teamCount={t.meta.teams.length} />}
+            {isAdmin && cricket && t.meta?.formatKey !== 'lk' && !t.started && <Link href={`/tournaments/${t.id}/create`} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
           </div>
         </div>
         <div className="tn-kpis">{kpis.map(([k, v]) => <div key={k}><span className="lbl lbl-sm">{k}</span><b>{v}</b></div>)}</div>
@@ -66,6 +80,18 @@ export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetai
           <StandingsTable rows={t.standings} qualify={t.qualify} showQualify={t.formatKey === 'lk' || t.formatKey === 'groups'} cricket={cricket} />
         )}
 
+        {active === 'fixtures' && isAdmin && t.meta?.formatKey === 'lk' && (
+          <TableFixturesPanel tournamentId={t.id} teamCount={t.meta.teams.length} qualify={t.meta.qualify} fixtureCount={t.fixtureCount} started={t.started} />
+        )}
+
+        {active === 'fixtures' && isAdmin && t.meta && t.meta.formatKey !== 'lk' && fixturePrompt && (
+          <FixturesImport tournamentId={t.id} prompt={fixturePrompt} teamCount={t.meta.teams.length} fixtureCount={t.fixtureCount} started={t.started} />
+        )}
+
+        {active === 'fixtures' && t.byes.length > 0 && (
+          <p className="tn-note">BYE · {t.byes.join(', ')} {t.byes.length === 1 ? 'goes' : 'go'} straight into {t.byes.length === 1 ? 'its' : 'their'} first match.</p>
+        )}
+
         {active === 'fixtures' && (
           days.length === 0 ? (
             <div className="tn-empty">
@@ -76,15 +102,28 @@ export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetai
             <div className="tn-days">
               {days.map(([day, items]) => (
                 <div key={day} className="tn-day">
-                  <div className="tn-dayhead lbl">{day}</div>
-                  {items.map((m) => {
+                  <div className="tn-dayhead lbl">{day.startsWith('s:') ? `${stageTitle(day.slice(2)).toUpperCase()} · ${items.length} MATCH${items.length === 1 ? '' : 'ES'}` : day.slice(2)}</div>
+                  {items.map((it) => {
+                    if (it.p) {
+                      const p = it.p;
+                      return (
+                        <div key={`p${p.no}`} className="tn-fx">
+                          <span className="tn-st" data-g="up"><i />UPCOMING<small className="tn-round">{day.startsWith('s:') ? dayText(it.at) : (p.round ?? `MATCH ${p.no}`).toUpperCase()}</small></span>
+                          <b className="tn-a" data-dim={p.openA ? 'true' : undefined}>{p.labelA}</b>
+                          <span className="tn-score">{p.time}</span>
+                          <b data-dim={p.openB ? 'true' : undefined}>{p.labelB}</b>
+                          <span className="lbl">{p.openA || p.openB ? 'TEAMS TBD' : `MATCH ${p.no}`}</span>
+                        </div>
+                      );
+                    }
+                    const m = it.m!;
                     const g = statusGroup(m.status);
                     const sa = m.summary.sides.find((s) => s.name === m.teamA)?.score, sb = m.summary.sides.find((s) => s.name === m.teamB)?.score;
                     const started = m.summary.sides.some((s) => s.score !== '—');
                     const time = m.scheduledAt ? new Date(m.scheduledAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'TBC';
                     return (
                       <div key={m.id} className="tn-fx">
-                        <span className="tn-st" data-g={g}><i />{g === 'live' ? 'LIVE' : g === 'up' ? 'UPCOMING' : 'RESULT'}</span>
+                        <span className="tn-st" data-g={g}><i />{g === 'live' ? 'LIVE' : g === 'up' ? 'UPCOMING' : 'RESULT'}{(day.startsWith('s:') || m.round) && <small className="tn-round">{day.startsWith('s:') ? dayText(it.at) : m.round!.toUpperCase()}</small>}</span>
                         <b className="tn-a" data-dim={m.winner === 'b' ? 'true' : undefined}>{m.teamA}</b>
                         <span className="tn-score">{g === 'up' || !started ? time : `${(sa ?? '').split(' ')[0]} – ${(sb ?? '').split(' ')[0]}`}</span>
                         <b data-dim={m.winner === 'a' ? 'true' : undefined}>{m.teamB}</b>
@@ -102,9 +141,13 @@ export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetai
           <TeamsTab
             tournamentId={t.id}
             teams={t.meta.teams.map((x) => ({ id: x.id, name: x.name, matches: t.matches.filter((m) => m.teamA === x.name || m.teamB === x.name).length }))}
-            candidates={isAdmin ? (candidates ?? []) : null}
-            minTeams={minTeamsFor(t.meta.formatKey)}
+            candidates={isAdmin && !t.started ? (candidates ?? []) : null}
+            adminLocked={isAdmin && t.started}
+            table={t.meta.formatKey === 'lk'}
+            minTeams={minTeamsFor(t.meta.formatKey, t.meta.qualify)}
             sportName={t.sportName}
+            fixtureCount={t.fixtureCount}
+            started={t.started}
           />
         )}
 

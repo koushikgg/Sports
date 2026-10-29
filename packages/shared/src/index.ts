@@ -90,19 +90,27 @@ export type Result<T = void> = { ok: true; value: T } | { ok: false; error: stri
 // Tournaments and matches created through the wizard
 // ---------------------------------------------------------------------------
 
-export const FORMAT_KEYS = ['league', 'lk', 'ko', 'groups'] as const;
+/**
+ * What a tournament is made of. New tournaments are one of two types: `lk` is the Table type (round robin, then the top 2
+ * or top 4 play on) and `custom` is a fixture list you build or paste in. `league`, `ko` and `groups` are kept for
+ * tournaments made before there were two types.
+ */
+export const FORMAT_KEYS = ['league', 'lk', 'ko', 'groups', 'custom'] as const;
+/** The types the create wizard and the editor offer. */
+export const FIXTURE_TYPES = ['lk', 'custom'] as const;
 export type FormatKey = (typeof FORMAT_KEYS)[number];
 
 /** Wizard format -> the coarse enum stored in the `format` column. The exact key lives in `meta.formatKey`. */
 export const FORMATS: Record<FormatKey, { label: string; description: string; column: 'round_robin' | 'league_knockout' | 'knockout' }> = {
   league: { label: 'League', description: 'Everyone plays everyone once. Top of the table wins.', column: 'round_robin' },
-  lk: { label: 'League + knockouts', description: 'Round robin, then the top teams play semi-finals and a final.', column: 'league_knockout' },
+  lk: { label: 'Table', description: 'Round robin: everyone plays everyone once and the fixtures are made for you. The top 4 then play semi-finals and a final, or the top 2 play the final.', column: 'league_knockout' },
   ko: { label: 'Knockout', description: 'Single elimination. Lose once and you are out.', column: 'knockout' },
   groups: { label: 'Groups + knockouts', description: 'Two groups play round robin, group winners advance.', column: 'league_knockout' },
+  custom: { label: 'Custom', description: 'You decide the fixtures: build them or paste them in from another tool. Any mix of league matches and knockout rounds, with byes.', column: 'knockout' },
 };
 
-/** Fewest teams a format can run with. */
-export const minTeamsFor = (formatKey: FormatKey) => (formatKey === 'league' ? 2 : 4);
+/** Fewest teams a format can run with. A Table that sends 2 teams on needs 3 (so the final is not the whole tournament). */
+export const minTeamsFor = (formatKey: FormatKey, qualify?: 2 | 4) => (formatKey === 'league' || formatKey === 'custom' ? 2 : formatKey === 'lk' && qualify === 2 ? 3 : 4);
 
 export const TIEBREAKS = ['NRR', 'DIFFERENCE', 'HEAD TO HEAD', 'WINS'] as const;
 
@@ -133,10 +141,54 @@ export const tournamentInputSchema = z
     tzOffset: z.number().int().min(-840).max(840),
   })
   .refine((v) => v.endDate >= v.startDate, { message: 'End date is before the start date.', path: ['endDate'] })
-  .refine((v) => v.formatKey === 'league' || v.teamIds.length >= 4, { message: 'Add at least 4 teams for this format.', path: ['teamIds'] });
+  .refine((v) => v.teamIds.length >= minTeamsFor(v.formatKey, v.qualify), { message: 'Add more teams for this format.', path: ['teamIds'] });
 export type TournamentInput = z.infer<typeof tournamentInputSchema>;
 
+/** Editing a saved tournament: the same settings the wizard collected, except the sport and the teams (the Teams tab handles those). */
+export const tournamentEditSchema = z
+  .object({
+    tournamentId: uuid,
+    name: z.string().trim().min(1, 'Give the tournament a name.').max(80),
+    startDate: date,
+    endDate: date,
+    venueIds: z.array(uuid).min(1, 'Pick at least one venue.'),
+    formatKey: z.enum(FORMAT_KEYS),
+    overs: z.number().int().min(1).max(50).optional(),
+    points: z.object({
+      win: z.number().int().min(0).max(5),
+      tie: z.number().int().min(0).max(5),
+      noResult: z.number().int().min(0).max(5),
+    }),
+    qualify: z.union([z.literal(2), z.literal(4)]),
+    tiebreak: z.enum(TIEBREAKS),
+    schedule: z.object({ perDay: z.number().int().min(1).max(4), firstMatchTime: time, restDay: z.boolean() }),
+    tzOffset: z.number().int().min(-840).max(840),
+  })
+  .refine((v) => v.endDate >= v.startDate, { message: 'End date is before the start date.', path: ['endDate'] });
+export type TournamentEdit = z.infer<typeof tournamentEditSchema>;
+
 /** What is stored in `tournaments.meta`. */
+/** One side of an imported fixture: a team, or the winner/loser of an earlier fixture. */
+export type FixtureSlot =
+  | { kind: 'team'; id: string; name: string }
+  | { kind: 'winner' | 'loser'; match: number }
+  /** Whoever is in this place of the league table when the league matches are done (1 = top). */
+  | { kind: 'rank'; pos: number };
+
+/** A fixture from the JSON import. It becomes a real match (`matchId`) once both teams are known and the sport can be scored. */
+export interface BracketFixture {
+  no: number;
+  round: string | null;
+  date: string;
+  time: string;
+  /** The browser's getTimezoneOffset() when it was imported, to turn date and time into an instant later. */
+  tz: number;
+  venue: string | null;
+  a: FixtureSlot;
+  b: FixtureSlot;
+  matchId: string | null;
+}
+
 export interface TournamentMeta {
   version: 1;
   formatKey: FormatKey;
@@ -150,6 +202,12 @@ export interface TournamentMeta {
   /** Counts the wizard computed. Fixtures themselves are not created yet. */
   plan: { leagueMatches: number; knockoutMatches: number; totalMatches: number; matchDays: number; lastMatchDate: string };
   fixturesGenerated: boolean;
+  /** The organiser's browser timezone offset (getTimezoneOffset) when the tournament was last saved, for fixtures made later. */
+  tz?: number;
+  /** Imported fixtures, including knockout rounds whose teams are not known yet. */
+  bracket?: BracketFixture[];
+  /** Teams that skip the first round of the imported bracket. */
+  byes?: { id: string; name: string }[];
 }
 
 export const VISIBILITIES = ['public', 'link', 'private'] as const;

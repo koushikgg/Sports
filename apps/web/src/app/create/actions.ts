@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { and, eq, getDb, inArray, matchLineups, matches, players, sports, teamMembers, teams, tournaments, users, venues } from '@sports/db';
 import { FORMATS, matchInputSchema, tournamentInputSchema, type TournamentMeta } from '@sports/shared';
+import { rebuildFixtures } from '@sports/scoring';
 import { planTournament, toInstant } from '@sports/sports-engine/src/tournament-plan';
 import { audit, requireRole } from '@/lib/guard';
 
@@ -70,6 +71,7 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
     schedule: { ...v.schedule, startDate: v.startDate, endDate: v.endDate },
     plan: { leagueMatches: plan.leagueMatches, knockoutMatches: plan.knockoutMatches, totalMatches: plan.totalMatches, matchDays: plan.matchDays, lastMatchDate: plan.lastMatchDate },
     fixturesGenerated: false,
+    tz: v.tzOffset,
   };
 
   const [row] = await db
@@ -84,6 +86,8 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
     })
     .returning({ id: tournaments.id });
   await audit(user.id, 'create', 'tournament', row!.id, { teams: teamRows.length, format: v.formatKey });
+  // a Table tournament gets its fixtures right away; a Custom one waits for the organiser's list
+  if (v.formatKey === 'lk') await rebuildFixtures(row!.id);
   revalidatePath('/tournaments');
   return { ok: true, id: row!.id, plan: meta.plan };
 }

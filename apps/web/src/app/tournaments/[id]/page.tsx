@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { asc, eq, getDb, sports, teams } from '@sports/db';
+import { asc, eq, getDb, sports, teams, venues } from '@sports/db';
 import { getTournamentDetail } from '@sports/scoring';
 import '@sports/sports-engine/src/all';
 import { ProfileBack } from '@/components/players/player-view';
+import { buildFixturePrompt } from '@sports/sports-engine/src/fixture-import';
+import { loadFixtureContext } from '@/lib/fixture-context';
 import { RatchShell } from '@/components/ratch/shell';
 import { TournamentPanel } from '@/components/tournaments/detail';
 import '@/components/tournaments/tournaments.css';
@@ -28,10 +30,14 @@ export default async function TournamentPage({ params }: { params: Promise<{ id:
   const candidates = user?.role === 'admin'
     ? (await getDb().select({ id: teams.id, name: teams.name }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).where(eq(sports.key, t.sportKey)).orderBy(asc(teams.name))).filter((x) => !inside.has(x.id))
     : undefined;
+  const allVenues = user?.role === 'admin' ? await getDb().select({ id: venues.id, name: venues.name }).from(venues).orderBy(asc(venues.name)) : undefined;
+  const fixturePrompt = user?.role === 'admin'
+    ? (() => loadFixtureContext(id).then((l) => (l ? buildFixturePrompt(l.ctx) : undefined)))()
+    : undefined;
   return (
     <RatchShell active="tournaments" user={user}>
       <ProfileBack href="/tournaments" label="ALL TOURNAMENTS" />
-      <TournamentPanel t={t} isAdmin={user?.role === 'admin'} candidates={candidates} />
+      <TournamentPanel t={t} isAdmin={user?.role === 'admin'} candidates={candidates} fixturePrompt={await fixturePrompt} venues={allVenues} />
     </RatchShell>
   );
 }

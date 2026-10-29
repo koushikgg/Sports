@@ -137,7 +137,11 @@ export const matches = pgTable('matches', {
   /** Umpires and anything else the match wizard collected. */
   meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
-});
+},
+(t) => [
+  // an imported fixture number becomes at most one match, even if two page views advance the bracket at once
+  uniqueIndex('matches_fixture_no_idx').on(t.tournamentId, sql`(${t.meta}->>'fixtureNo')`).where(sql`${t.meta}->>'fixtureNo' is not null`),
+]);
 
 /** Who plays for which side in a given match (lineup, keeper, captain). */
 export const matchLineups = pgTable(

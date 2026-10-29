@@ -31,6 +31,7 @@ export function planTournament(p: {
   endDate: string;
 }): Plan {
   const n = p.teams;
+  if (p.formatKey === 'custom') return { leagueMatches: 0, knockoutMatches: 0, totalMatches: 0, rounds: 0, matchDays: 0, lastMatchDate: '', overrun: false };
   const half = Math.ceil(n / 2);
   const leagueMatches =
     p.formatKey === 'ko' ? 0 : p.formatKey === 'groups' ? 2 * ((half * (half - 1)) / 2) : (n * (n - 1)) / 2;

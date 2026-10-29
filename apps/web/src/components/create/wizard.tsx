@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { FORMAT_KEYS, FORMATS, TIEBREAKS, VISIBILITIES, minTeamsFor, type FormatKey, type Visibility } from '@sports/shared';
+import { FIXTURE_TYPES, FORMATS, TIEBREAKS, VISIBILITIES, minTeamsFor, type FormatKey, type Visibility } from '@sports/shared';
 import { addDays, planTournament, previewRound1 } from '@sports/sports-engine/src/tournament-plan';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
@@ -31,7 +31,7 @@ interface Props {
 }
 
 type Done =
-  | { kind: 'tournament'; id: string; name: string; teams: number; plan: { totalMatches: number; matchDays: number } }
+  | { kind: 'tournament'; id: string; name: string; teams: number; table: boolean; plan: { totalMatches: number; matchDays: number } }
   | { kind: 'match'; id: string; title: string; when: string };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -193,7 +193,7 @@ export function Wizard(props: Props) {
   const round1 = previewRound1(t.teamIds, t.perDay, t.start || today(), t.firstTime);
 
   // ---- validity per step
-  const minTeams = minTeamsFor(t.formatKey);
+  const minTeams = minTeamsFor(t.formatKey, t.qualify);
   const invalid: string[] = mode === 'tournament'
     ? [
         !t.name.trim() ? 'Give the tournament a name.' : !t.start || !t.end ? 'Choose the start and end dates.' : t.end < t.start ? 'End date is before the start date.' : !t.venueIds.length ? 'Pick at least one venue.' : '',
@@ -254,7 +254,7 @@ export function Wizard(props: Props) {
           schedule: { perDay: t.perDay, firstMatchTime: t.firstTime, restDay: t.rest }, tzOffset,
         });
         if (!r.ok) return setServerError(r.error);
-        setDone({ kind: 'tournament', id: r.id, name: t.name, teams: teamCount, plan: r.plan });
+        setDone({ kind: 'tournament', id: r.id, name: t.name, teams: teamCount, table: t.formatKey === 'lk', plan: r.plan });
       } else {
         const r = await createMatchAction({
           tournamentId: m.tournamentId, teamAId: m.teamAId, teamBId: m.teamBId, venueId: m.venueId || null, date: m.date, time: m.time, tzOffset,
@@ -276,7 +276,7 @@ export function Wizard(props: Props) {
     ? [['Basics', t.name || 'Name, sport, dates'], ['Format & rules', FORMATS[t.formatKey].label], ['Teams', `${teamCount} teams`], ['Schedule', `${plan.totalMatches} matches · ${plan.matchDays} days`], ['Review', 'Check and publish']]
     : [['Match details', `${teamCode(teamById(m.teamAId)?.name ?? '—', teamById(m.teamAId)?.shortName)} vs ${teamCode(teamById(m.teamBId)?.name ?? '—', teamById(m.teamBId)?.shortName)}`], ['Rules', `${m.rules.overs} overs · PP ${m.rules.powerplay}`], ['Playing XI', `${m.lineups.a.playerIds.length} + ${m.lineups.b.playerIds.length} selected`], ['Officials', scorerName || 'Assign a scorer'], ['Review', 'Check and create']];
   const titles = isT
-    ? [['Name your tournament', 'The basics viewers see first.'], ['Format and rules', 'How teams progress and how points are awarded.'], ['Choose the teams', `Select existing teams or add new ones. At least ${minTeams} are needed.`], ['Build the schedule', 'Set the pace and timing. The preview below is not saved as fixtures yet.'], ['Review and publish', 'Publishing saves the tournament and all of these settings. Fixtures are planned separately.']]
+    ? [['Name your tournament', 'The basics viewers see first.'], ['Fixture type and rules', 'Pick a Table, where the fixtures are made for you, or Custom, where you bring your own.'], ['Choose the teams', `Select existing teams or add new ones. At least ${minTeams} are needed.`], ['Build the schedule', t.formatKey === 'lk' ? 'Set the pace and timing. Your fixtures are made from this when you publish, and made again if you change teams or settings before the tournament starts.' : 'Set the pace and timing. These guide the fixtures you paste in later; nothing is created from them.'], ['Review and publish', 'Publishing saves the tournament and all of these settings.' + (t.formatKey === 'lk' ? ' Your fixtures are made at once.' : ' Add your fixtures from the Fixtures tab afterwards.') + '']]
     : [['Match details', 'Who is playing, where and when.'], ['Playing conditions', 'These rules drive the scorer console, including over limits and free hits.'], ['Playing XI', `Select ${m.rules.playersPerSide} for each side, then mark the captain and wicketkeeper.`], ['Officials and visibility', 'The assigned scorer opens the console on match day. Only they and admins can score this match.'], ['Review and create', 'Creating the match adds it to the schedule.']];
 
   const venueName = (id: string) => venueList.find((x) => x.id === id)?.name ?? '';
@@ -326,7 +326,7 @@ export function Wizard(props: Props) {
     if (isT && step === 1) return (
       <>
         <div className="cw-formats">
-          {FORMAT_KEYS.map((k) => (
+          {FIXTURE_TYPES.map((k) => (
             <button key={k} type="button" aria-pressed={t.formatKey === k} data-on={t.formatKey === k ? 'true' : undefined} onClick={() => setT({ ...t, formatKey: k })}><b>{FORMATS[k].label}</b><small>{FORMATS[k].description}</small></button>
           ))}
         </div>
@@ -592,7 +592,7 @@ export function Wizard(props: Props) {
               <h2>{done.kind === 'tournament' ? `${done.name} is published` : 'Match created'}</h2>
               <p>
                 {done.kind === 'tournament'
-                  ? `${done.teams} teams are entered. The format plans ${done.plan.totalMatches} matches over ${done.plan.matchDays} match days. Fixtures have not been created yet; all your settings are saved with the tournament.`
+                  ? (done.table ? `${done.teams} teams are entered. Your ${done.plan.totalMatches} fixtures are made: every team plays every other team once, then the knockouts. They are made again if you change the teams or settings before the tournament starts.` : `${done.teams} teams are entered. Open the Fixtures tab to build or paste your fixtures; nothing is created until you do.`)
                   : `${done.title} is scheduled for ${done.when}. The assigned scorer can open the console from the match card.`}
               </p>
               <div className="cw-done-actions">

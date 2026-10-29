@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "matches_fixture_no_idx" ON "matches" USING btree ("tournament_id",("meta"->>'fixtureNo')) WHERE "matches"."meta"->>'fixtureNo' is not null;
