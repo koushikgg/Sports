@@ -287,7 +287,7 @@ export function TeamManage({ team, roster, managers, canManage, isAdmin }: Props
         </div>
       )}
 
-      <input ref={logoInput} type="file" accept="image/*" hidden aria-label="Team photo" onChange={(e) => { void pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
+      {isAdmin && <input ref={logoInput} type="file" accept="image/*" hidden aria-label="Team photo" onChange={(e) => { void pickLogo(e.target.files?.[0]); e.target.value = ''; }} />}
 
       {menu && <div className="tm-scrim" onClick={() => setMenu(null)} />}
 
