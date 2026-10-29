@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { asc, eq, getDb, sports, teams } from '@sports/db';
 import { getTournamentDetail } from '@sports/scoring';
 import '@sports/sports-engine/src/all';
 import { ProfileBack } from '@/components/players/player-view';
@@ -22,10 +23,15 @@ export default async function TournamentPage({ params }: { params: Promise<{ id:
   const { user } = await getShellUser();
   const t = /^[0-9a-f-]{36}$/i.test(id) ? await getTournamentDetail(id, !!user) : null;
   if (!t) notFound();
+  // teams an admin can still add: same sport, not already entered
+  const inside = new Set((t.meta?.teams ?? []).map((x) => x.id));
+  const candidates = user?.role === 'admin'
+    ? (await getDb().select({ id: teams.id, name: teams.name }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).where(eq(sports.key, t.sportKey)).orderBy(asc(teams.name))).filter((x) => !inside.has(x.id))
+    : undefined;
   return (
     <RatchShell active="tournaments" user={user}>
       <ProfileBack href="/tournaments" label="ALL TOURNAMENTS" />
-      <TournamentPanel t={t} isAdmin={user?.role === 'admin'} />
+      <TournamentPanel t={t} isAdmin={user?.role === 'admin'} candidates={candidates} />
     </RatchShell>
   );
 }

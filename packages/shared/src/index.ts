@@ -101,6 +101,9 @@ export const FORMATS: Record<FormatKey, { label: string; description: string; co
   groups: { label: 'Groups + knockouts', description: 'Two groups play round robin, group winners advance.', column: 'league_knockout' },
 };
 
+/** Fewest teams a format can run with. */
+export const minTeamsFor = (formatKey: FormatKey) => (formatKey === 'league' ? 2 : 4);
+
 export const TIEBREAKS = ['NRR', 'DIFFERENCE', 'HEAD TO HEAD', 'WINS'] as const;
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date');

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { FORMAT_KEYS, FORMATS, TIEBREAKS, VISIBILITIES, type FormatKey, type Visibility } from '@sports/shared';
+import { FORMAT_KEYS, FORMATS, TIEBREAKS, VISIBILITIES, minTeamsFor, type FormatKey, type Visibility } from '@sports/shared';
 import { addDays, planTournament, previewRound1 } from '@sports/sports-engine/src/tournament-plan';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
@@ -193,7 +193,7 @@ export function Wizard(props: Props) {
   const round1 = previewRound1(t.teamIds, t.perDay, t.start || today(), t.firstTime);
 
   // ---- validity per step
-  const minTeams = t.formatKey === 'league' ? 2 : 4;
+  const minTeams = minTeamsFor(t.formatKey);
   const invalid: string[] = mode === 'tournament'
     ? [
         !t.name.trim() ? 'Give the tournament a name.' : !t.start || !t.end ? 'Choose the start and end dates.' : t.end < t.start ? 'End date is before the start date.' : !t.venueIds.length ? 'Pick at least one venue.' : '',

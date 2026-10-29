@@ -2,23 +2,25 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { TournamentDetail } from '@sports/scoring';
+import { minTeamsFor } from '@sports/shared';
 import { Leaderboards } from './leaderboards';
+import { TeamsTab } from './teams-tab';
 import { sportColor, statusGroup } from '@/components/matches/model';
 import { useHydrated } from '@/components/matches/time';
 import { StandingsTable } from './standings-table';
 
-type Tab = 'standings' | 'fixtures' | 'bracket' | 'leaders';
-const TABS: [string, Tab][] = [['STANDINGS', 'standings'], ['FIXTURES', 'fixtures'], ['BRACKET', 'bracket'], ['LEADERS', 'leaders']];
+type Tab = 'standings' | 'fixtures' | 'teams' | 'bracket' | 'leaders';
+const TABS: [string, Tab][] = [['STANDINGS', 'standings'], ['FIXTURES', 'fixtures'], ['TEAMS', 'teams'], ['BRACKET', 'bracket'], ['LEADERS', 'leaders']];
 const dateLabel = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase() : '—');
 
-export function TournamentPanel({ t, isAdmin }: { t: TournamentDetail; isAdmin: boolean }) {
+export function TournamentPanel({ t, isAdmin, candidates }: { t: TournamentDetail; isAdmin: boolean; /** Admin only: teams that can still be added. */ candidates?: { id: string; name: string }[] }) {
   const hasBracket = !!t.bracket;
   const [tab, setTab] = useState<Tab>('standings');
   const [hover, setHover] = useState<number | null>(null);
   const ready = useHydrated();
   const color = sportColor(t.sportKey);
   const cricket = t.sportKey === 'cricket';
-  const tabs = TABS.filter(([, v]) => (v === 'bracket' ? hasBracket : v === 'leaders' ? !!t.boards : true));
+  const tabs = TABS.filter(([, v]) => (v === 'teams' ? !!t.meta : v === 'bracket' ? hasBracket : v === 'leaders' ? !!t.boards : true));
   const active = tabs.some(([, v]) => v === tab) ? tab : 'standings';
 
   const leader = t.standings.find((s) => s.played > 0);
@@ -94,6 +96,16 @@ export function TournamentPanel({ t, isAdmin }: { t: TournamentDetail; isAdmin: 
               ))}
             </div>
           )
+        )}
+
+        {active === 'teams' && t.meta && (
+          <TeamsTab
+            tournamentId={t.id}
+            teams={t.meta.teams.map((x) => ({ id: x.id, name: x.name, matches: t.matches.filter((m) => m.teamA === x.name || m.teamB === x.name).length }))}
+            candidates={isAdmin ? (candidates ?? []) : null}
+            minTeams={minTeamsFor(t.meta.formatKey)}
+            sportName={t.sportName}
+          />
         )}
 
         {active === 'bracket' && t.bracket && (
