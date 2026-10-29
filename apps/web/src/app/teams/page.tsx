@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { asc, count, eq, getDb, sports, teamMembers, teams } from '@sports/db';
+import { Button, Input, Label, Select } from '@/components/ui';
+import { createTeam } from './actions';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { RatchShell } from '@/components/ratch/shell';
 import '@/components/tournaments/tournaments.css';
@@ -12,9 +14,10 @@ export const metadata: Metadata = { title: 'Teams', robots: { index: false } };
 export default async function TeamsPage() {
   const { user } = await getShellUser();
   const db = getDb();
-  const [rows, sizes] = await Promise.all([
+  const [rows, sizes, sportRows] = await Promise.all([
     db.select({ id: teams.id, name: teams.name, shortName: teams.shortName, sport: sports.name, sportKey: sports.key }).from(teams).innerJoin(sports, eq(sports.id, teams.sportId)).orderBy(asc(sports.name), asc(teams.name)),
     db.select({ teamId: teamMembers.teamId, n: count() }).from(teamMembers).groupBy(teamMembers.teamId),
+    user?.role === 'admin' ? db.select().from(sports).orderBy(asc(sports.name)) : Promise.resolve([]),
   ]);
   const size = new Map(sizes.map((s) => [s.teamId, Number(s.n)]));
 
@@ -22,8 +25,20 @@ export default async function TeamsPage() {
     <RatchShell active="teams" user={user}>
       <div className="mx-head">
         <div><span className="lbl">DIRECTORY</span><h1>Teams</h1></div>
-        {user?.role === 'admin' && <Link href="/admin/teams" className="mx-btn mx-btn-lg" data-variant="gray">MANAGE TEAMS</Link>}
       </div>
+      {user?.role === 'admin' && (
+        <details className="mb-6 rounded-2xl bg-surface p-5">
+          <summary className="cursor-pointer font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">+ Add team</summary>
+          <form action={createTeam} className="mt-4 grid gap-3 sm:grid-cols-4 sm:items-end">
+            <Label text="Sport">
+              <Select name="sportId" required>{sportRows.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
+            </Label>
+            <Label text="Name"><Input name="name" required /></Label>
+            <Label text="Short (≤5)"><Input name="shortName" maxLength={5} /></Label>
+            <Button>Create team</Button>
+          </form>
+        </details>
+      )}
       {rows.length === 0 ? <p className="tn-empty">No teams yet.</p> : (
         <div className="dr-grid">
           {rows.map((t) => {
@@ -34,7 +49,7 @@ export default async function TeamsPage() {
                 <span><b>{t.name}</b><small><i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 3, background: sportColor(t.sportKey), marginRight: 6 }} />{t.sport} · {size.get(t.id) ?? 0} players</small></span>
               </>
             );
-            return user?.role === 'admin' ? <Link key={t.id} href={`/admin/teams/${t.id}`} className="dr-card">{body}</Link> : <div key={t.id} className="dr-card">{body}</div>;
+            return <Link key={t.id} href={`/teams/${t.id}`} className="dr-card">{body}</Link>;
           })}
         </div>
       )}

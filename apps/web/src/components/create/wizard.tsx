@@ -464,7 +464,7 @@ export function Wizard(props: Props) {
                 <span className="cw-count" data-ok={lineup.playerIds.length === n ? 'true' : undefined}>{lineup.playerIds.length} / {n}</span>
               </div>
               {roster.length === 0 ? (
-                <p className="cw-muted">This team has no players. <Link href={`/admin/teams/${teamId}`} target="_blank" className="cw-link">Add players ↗</Link></p>
+                <p className="cw-muted">This team has no players. <Link href={`/teams/${teamId}`} target="_blank" className="cw-link">Add players ↗</Link></p>
               ) : (
                 <>
                   <button type="button" className="cw-link cw-auto" onClick={() => autoPick(side, teamId)}>AUTO-PICK FIRST {n}</button>
@@ -574,6 +574,7 @@ export function Wizard(props: Props) {
                   {serverError ?? (err || (last ? 'Everything looks ready.' : overrun && step === 3 ? `Schedule runs past ${fmtD(t.end)}. Add matches per day or extend the end date.` : ''))}
                 </span>
                 <div className="cw-nav">
+                  <Link href={isT ? '/tournaments' : '/matches'} className="cw-btn" data-variant="gray" aria-label="Cancel and leave without saving">CANCEL</Link>
                   {step > 0 && <button type="button" className="cw-btn" data-variant="gray" onClick={() => go(step - 1)}>BACK</button>}
                   <button type="button" className="cw-btn" data-variant={err ? 'off' : last ? 'amber' : 'blue'} disabled={!!err || submitting} onClick={last ? submit : () => go(step + 1)}>
                     {submitting ? 'SAVING…' : last ? (isT ? 'PUBLISH TOURNAMENT' : 'CREATE MATCH') : 'CONTINUE'}

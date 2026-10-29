@@ -12,7 +12,11 @@ const config: NextConfig = {
   // The scoring console moved out of /admin. A config redirect runs before the middleware and the admin
   // layout, so scorers following an old link are not turned away on the way.
   async redirects() {
-    return [{ source: '/admin/matches/:id/score', destination: '/score/:id', permanent: true }];
+    return [
+      { source: '/admin/matches/:id/score', destination: '/score/:id', permanent: true },
+      { source: '/admin/teams', destination: '/teams', permanent: false },
+      { source: '/admin/teams/:id', destination: '/teams/:id', permanent: false },
+    ];
   },
   transpilePackages: ['@sports/db', '@sports/scoring', '@sports/shared', '@sports/sports-engine'],
 };

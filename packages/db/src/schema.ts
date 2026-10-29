@@ -69,6 +69,8 @@ export const players = pgTable('players', {
   email: text('email'),
   employeeId: text('employee_id'),
   avatarUrl: text('avatar_url'),
+  /** The account this player signs in with, when they are also a user. */
+  userId: uuid('user_id').unique().references(() => users.id, { onDelete: 'set null' }),
   /** Playing role shown in squad pickers: BAT, BOWL, AR or WK. */
   role: text('role'),
   createdAt: createdAt(),
@@ -82,6 +84,17 @@ export const teamMembers = pgTable(
     isCaptain: boolean('is_captain').notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.teamId, t.playerId] })],
+);
+
+/** Users who may manage a team's people. The captain is the roster's captain player, linked through players.user_id. */
+export const teamManagers = pgTable(
+  'team_managers',
+  {
+    teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.teamId, t.userId] })],
 );
 
 export const tournaments = pgTable('tournaments', {

@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   ['/admin', 'DASHBOARD'],
   ['/admin/sports', 'SPORTS'],
-  ['/admin/teams', 'TEAMS'],
   ['/admin/players', 'PLAYERS'],
   ['/admin/tournaments', 'TOURNAMENTS'],
   ['/admin/matches', 'MATCHES'],

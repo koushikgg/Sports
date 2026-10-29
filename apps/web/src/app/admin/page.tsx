@@ -13,7 +13,7 @@ export default async function AdminDashboard() {
   const stats = [
     ['Live matches', liveRow?.n ?? 0, '/admin/matches'],
     ['Matches', await total(matches), '/admin/matches'],
-    ['Teams', await total(teams), '/admin/teams'],
+    ['Teams', await total(teams), '/teams'],
     ['Players', await total(players), '/admin/players'],
     ['Tournaments', await total(tournaments), '/admin/tournaments'],
   ] as const;
