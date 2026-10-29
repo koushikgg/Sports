@@ -109,6 +109,23 @@ export const FORMATS: Record<FormatKey, { label: string; description: string; co
   custom: { label: 'Custom', description: 'You decide the fixtures: build them or paste them in from another tool. Any mix of league matches and knockout rounds, with byes.', column: 'knockout' },
 };
 
+/**
+ * How many matches each team can play in a Table: from 1 up to everyone else (teams - 1). Every match has two teams, so
+ * teams x matches must be even; with an odd number of teams only even values work.
+ */
+export const matchesPerTeamOptions = (teams: number): number[] => Array.from({ length: Math.max(0, teams - 1) }, (_, i) => i + 1).filter((k) => (teams * k) % 2 === 0);
+
+/**
+ * The value to use for a team count: undefined means everyone plays everyone. A wanted value that is too big or does not fit
+ * the team count drops to the nearest value that does.
+ */
+export function fitMatchesPerTeam(teams: number, wanted?: number | null): number | undefined {
+  if (wanted == null || teams < 2 || wanted >= teams - 1) return undefined;
+  const opts = matchesPerTeamOptions(teams);
+  const k = [...opts].reverse().find((o) => o <= wanted) ?? opts[0];
+  return k === undefined || k >= teams - 1 ? undefined : k;
+}
+
 /** Fewest teams a format can run with. A Table that sends 2 teams on needs 3 (so the final is not the whole tournament). */
 export const minTeamsFor = (formatKey: FormatKey, qualify?: 2 | 4) => (formatKey === 'league' || formatKey === 'custom' ? 2 : formatKey === 'lk' && qualify === 2 ? 3 : 4);
 
@@ -134,6 +151,8 @@ export const tournamentInputSchema = z
       noResult: z.number().int().min(0).max(5),
     }),
     qualify: z.union([z.literal(2), z.literal(4)]),
+    /** Table only: matches each team plays. Left out means everyone plays everyone. */
+    matchesPerTeam: z.number().int().min(1).max(60).optional(),
     tiebreak: z.enum(TIEBREAKS),
     teamIds: z.array(uuid).min(2),
     schedule: z.object({ perDay: z.number().int().min(1).max(4), firstMatchTime: time, restDay: z.boolean() }),
@@ -141,7 +160,8 @@ export const tournamentInputSchema = z
     tzOffset: z.number().int().min(-840).max(840),
   })
   .refine((v) => v.endDate >= v.startDate, { message: 'End date is before the start date.', path: ['endDate'] })
-  .refine((v) => v.teamIds.length >= minTeamsFor(v.formatKey, v.qualify), { message: 'Add more teams for this format.', path: ['teamIds'] });
+  .refine((v) => v.teamIds.length >= minTeamsFor(v.formatKey, v.qualify), { message: 'Add more teams for this format.', path: ['teamIds'] })
+  .refine((v) => v.formatKey !== 'lk' || v.matchesPerTeam === undefined || matchesPerTeamOptions(v.teamIds.length).includes(v.matchesPerTeam), { message: 'That number of matches per team does not fit this many teams.', path: ['matchesPerTeam'] });
 export type TournamentInput = z.infer<typeof tournamentInputSchema>;
 
 /** Editing a saved tournament: the same settings the wizard collected, except the sport and the teams (the Teams tab handles those). */
@@ -160,6 +180,7 @@ export const tournamentEditSchema = z
       noResult: z.number().int().min(0).max(5),
     }),
     qualify: z.union([z.literal(2), z.literal(4)]),
+    matchesPerTeam: z.number().int().min(1).max(60).optional(),
     tiebreak: z.enum(TIEBREAKS),
     schedule: z.object({ perDay: z.number().int().min(1).max(4), firstMatchTime: time, restDay: z.boolean() }),
     tzOffset: z.number().int().min(-840).max(840),
@@ -196,6 +217,8 @@ export interface TournamentMeta {
   venues: { id: string; name: string }[];
   points: { win: number; tie: number; noResult: number };
   qualify: 2 | 4;
+  /** Table only: matches each team plays. Missing means everyone plays everyone. */
+  matchesPerTeam?: number;
   tiebreak: (typeof TIEBREAKS)[number];
   teams: { id: string; name: string }[];
   schedule: { perDay: number; firstMatchTime: string; restDay: boolean; startDate: string; endDate: string };

@@ -1,4 +1,4 @@
-import type { BracketFixture, FixtureSlot } from '@sports/shared';
+import { fitMatchesPerTeam, type BracketFixture, type FixtureSlot } from '@sports/shared';
 import { addDays } from './tournament-plan';
 
 /**
@@ -12,6 +12,8 @@ export interface TableInput {
   startDate: string;
   perDay: number;
   firstMatchTime: string;
+  /** Matches each team plays. Missing means everyone plays everyone; see `fitMatchesPerTeam` for what fits. */
+  matchesPerTeam?: number;
   /** One empty day after each round of the league. */
   restDay: boolean;
   /** Minutes between matches on the same day. It shrinks so the last match of a day starts before 23:00. */
@@ -30,6 +32,45 @@ const winner = (match: number): FixtureSlot => ({ kind: 'winner', match });
 /** How long a match takes plus a break, so a day of matches does not overlap. Cricket scales with the overs. */
 export const gapMinutesFor = (sportKey: string, overs?: number) => (sportKey === 'cricket' ? Math.max(60, (overs ?? 20) * 8 + 40) : 60);
 
+type Team = { id: string; name: string };
+
+/**
+ * The league as rounds of pairs where nobody plays twice in a round. `perTeam` undefined is a full round robin (circle
+ * method). Otherwise every team plays exactly that many matches and no pair meets twice:
+ * - an even number of teams uses the first `perTeam` rounds of the circle method (each round is a perfect matching);
+ * - an odd number uses a ring (team i meets the teams 1..perTeam/2 places either side), which is the only way to give
+ *   every team the same count, then packs those matches into rounds.
+ */
+function leagueRounds(teams: Team[], perTeam: number | undefined): [Team, Team][][] {
+  const n = teams.length;
+  if (perTeam !== undefined && n % 2 === 1) {
+    const edges: [Team, Team][] = [];
+    for (let d = 1; d <= perTeam / 2; d++) for (let a = 0; a < n; a++) edges.push([teams[a]!, teams[(a + d) % n]!]);
+    const rounds: [Team, Team][][] = [];
+    const used: Set<string>[] = [];
+    for (const e of edges) {
+      let r = used.findIndex((u) => !u.has(e[0].id) && !u.has(e[1].id));
+      if (r === -1) { rounds.push([]); used.push(new Set()); r = rounds.length - 1; }
+      rounds[r]!.push(e); used[r]!.add(e[0].id); used[r]!.add(e[1].id);
+    }
+    return rounds;
+  }
+  // circle method: with an odd number of teams one sits out each round
+  const ring: (Team | null)[] = [...teams];
+  if (ring.length % 2) ring.push(null);
+  const rounds: [Team, Team][][] = [];
+  for (let r = 0; r < ring.length - 1; r++) {
+    const pairs: [Team, Team][] = [];
+    for (let k = 0; k < ring.length / 2; k++) {
+      const a = ring[k], b = ring[ring.length - 1 - k];
+      if (a && b) pairs.push([a, b]);
+    }
+    rounds.push(pairs);
+    ring.splice(1, 0, ring.pop()!);
+  }
+  return perTeam === undefined ? rounds : rounds.slice(0, perTeam);
+}
+
 export function generateTableFixtures(i: TableInput): BracketFixture[] {
   const n = i.teams.length;
   if (n < 2) return [];
@@ -38,20 +79,7 @@ export function generateTableFixtures(i: TableInput): BracketFixture[] {
   const first = h * 60 + m;
   const gap = perDay > 1 ? Math.max(30, Math.min(i.gapMinutes, Math.floor((1380 - first) / (perDay - 1)))) : 0;
 
-  // circle method: with an odd number of teams one sits out each round
-  const ring: ({ id: string; name: string } | null)[] = [...i.teams];
-  if (ring.length % 2) ring.push(null);
-  const rounds: [{ id: string; name: string }, { id: string; name: string }][][] = [];
-  for (let r = 0; r < ring.length - 1; r++) {
-    const pairs: [{ id: string; name: string }, { id: string; name: string }][] = [];
-    for (let k = 0; k < ring.length / 2; k++) {
-      const a = ring[k], b = ring[ring.length - 1 - k];
-      if (!a || !b) continue;
-      pairs.push([a, b]);
-    }
-    rounds.push(pairs);
-    ring.splice(1, 0, ring.pop()!);
-  }
+  const rounds = leagueRounds(i.teams, fitMatchesPerTeam(n, i.matchesPerTeam));
 
   // orient every pair so the team with fewer home games so far is home; nobody ends up always home or always away
   const lead = new Map<string, number>(); // home games minus away games

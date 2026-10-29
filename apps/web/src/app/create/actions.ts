@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { and, eq, getDb, inArray, matchLineups, matches, players, sports, teamMembers, teams, tournaments, users, venues } from '@sports/db';
-import { FORMATS, matchInputSchema, tournamentInputSchema, type TournamentMeta } from '@sports/shared';
+import { FORMATS, fitMatchesPerTeam, matchInputSchema, tournamentInputSchema, type TournamentMeta } from '@sports/shared';
 import { rebuildFixtures } from '@sports/scoring';
 import { planTournament, toInstant } from '@sports/sports-engine/src/tournament-plan';
 import { audit, requireRole } from '@/lib/guard';
@@ -56,7 +56,8 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
     return { ok: false, error: `Every team must be a ${sport.name} team.` };
   }
 
-  const plan = planTournament({ formatKey: v.formatKey, teams: teamRows.length, qualify: v.qualify, perDay: v.schedule.perDay, restDay: v.schedule.restDay, startDate: v.startDate, endDate: v.endDate });
+  const perTeam = v.formatKey === 'lk' ? fitMatchesPerTeam(teamRows.length, v.matchesPerTeam) : undefined;
+  const plan = planTournament({ formatKey: v.formatKey, teams: teamRows.length, qualify: v.qualify, matchesPerTeam: perTeam, perDay: v.schedule.perDay, restDay: v.schedule.restDay, startDate: v.startDate, endDate: v.endDate });
   const byId = new Map(teamRows.map((t) => [t.id, t]));
   const venueById = new Map(venueRows.map((x) => [x.id, x]));
   const meta: TournamentMeta = {
@@ -66,6 +67,7 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
     venues: v.venueIds.map((id) => ({ id, name: venueById.get(id)!.name })),
     points: v.points,
     qualify: v.qualify,
+    ...(perTeam ? { matchesPerTeam: perTeam } : {}),
     tiebreak: v.tiebreak,
     teams: v.teamIds.map((id) => ({ id, name: byId.get(id)!.name })),
     schedule: { ...v.schedule, startDate: v.startDate, endDate: v.endDate },

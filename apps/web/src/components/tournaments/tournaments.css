@@ -35,9 +35,12 @@
 .tn-trow:nth-child(2) { border-radius: 16px 16px 6px 6px; }
 .tn-trow:last-of-type { border-radius: 6px 6px 16px 16px; }
 .tn-thead { background: transparent; padding: 8px 14px; color: var(--text-tertiary); }
-.tn-trow[data-q='true'] { background: color-mix(in srgb, #34c759 7%, var(--surface-sunken)); }
+.tn-trow[data-q='true'] { background: color-mix(in srgb, #34c759 16%, var(--surface-sunken)); box-shadow: inset 4px 0 0 #34c759; }
+/* a gap under the last qualifying row marks the cut-off */
+.tn-trow[data-cut='true'] { margin-bottom: 10px; }
 .tn-pos { font-weight: 700; color: var(--text-tertiary); }
 .tn-trow[data-q='true'] .tn-pos { color: #6fe08d; }
+.tn-trow[data-q='true'] .tn-team b { color: #fff; }
 .tn-team { display: flex; align-items: center; gap: 10px; min-width: 0; font-family: var(--font-sans); }
 .tn-team i { width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 9px; font-weight: 700; font-style: normal; }
 .tn-team b { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -48,7 +51,7 @@
 .tn-form i[data-r='T'] { background: var(--surface-muted); color: var(--text-secondary); }
 .tn-pts { font-size: 15px; font-weight: 700; color: var(--text-primary); }
 .tn-legend { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px 0; font-family: var(--font-sans); font-size: 12px; color: var(--text-tertiary); }
-.tn-legend i { width: 10px; height: 10px; border-radius: 3px; background: color-mix(in srgb, #34c759 30%, transparent); }
+.tn-legend i { width: 10px; height: 10px; border-radius: 3px; background: #34c759; }
 
 .tn-days { display: flex; flex-direction: column; gap: 20px; }
 .tn-day { display: flex; flex-direction: column; gap: 4px; }

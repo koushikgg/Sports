@@ -22,6 +22,7 @@ import {
 import { FORMATS, type Ack, type BracketFixture, type FixtureSlot, type FormatKey, type MatchSnapshot, type MatchUpdate, type Role, type ScoreEventInput, type ScoreSummary, type SportKey, type TournamentMeta } from '@sports/shared';
 import { formatOvers, type CricketState } from '@sports/sports-engine/src/cricket';
 import { matchTeamStats } from '@sports/sports-engine/src/cricket-view';
+import { fitMatchesPerTeam } from '@sports/shared';
 import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
 import { isMatchRef, slotLabel } from '@sports/sports-engine/src/fixture-import';
 import { computeCricketBoards, type Board, type BoardRow, type LeaderMatch } from '@sports/sports-engine/src/leaders';
@@ -623,7 +624,7 @@ export async function rebuildFixtures(tournamentId: string): Promise<{ removed: 
   if (!row || !meta?.teams?.length || meta.formatKey !== 'lk') return { removed, generated: 0, locked: false };
 
   const bracket = generateTableFixtures({
-    teams: meta.teams, qualify: meta.qualify, startDate: meta.schedule.startDate, perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime,
+    teams: meta.teams, qualify: meta.qualify, matchesPerTeam: fitMatchesPerTeam(meta.teams.length, meta.matchesPerTeam), startDate: meta.schedule.startDate, perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime,
     restDay: meta.schedule.restDay, gapMinutes: gapMinutesFor(row.sportKey, meta.overs), venues: (meta.venues ?? []).map((v) => v.name), tz: meta.tz ?? 0,
   });
   await db.update(tournaments).set({ meta: { ...meta, bracket, fixturesGenerated: bracket.length > 0 } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));

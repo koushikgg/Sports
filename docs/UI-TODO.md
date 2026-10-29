@@ -45,6 +45,9 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
     or **top 2** (a final between 1st and 2nd). Knockout sides are table positions that fill in when the league matches are
     done; the league table ignores knockout results. Fixtures are made again automatically when teams or settings change.
   - **Custom** (`formatKey: 'custom'`): the JSON import below.
+  - **Matches per team:** a Table can be a full round robin or fewer matches each (every team plays exactly that many, nobody
+    twice, no pair repeated). With an odd number of teams only even numbers work. If the team count changes, a value that no
+    longer fits drops to the nearest that does. The top 2 / top 4 rows of the table are coloured.
   - Teams can't be added once the tournament has started (and the type, qualifiers, overs and daily schedule lock).
   - `league`, `ko` and `groups` still exist for tournaments made before this; the wizard and editor only offer Table and Custom.
 - [ ] Table fixtures are always cricket-style matches with no scorer or playing XI; assigning them in bulk is still open.

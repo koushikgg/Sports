@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { EditMatchSchedule } from './edit-schedule';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MatchSnapshot } from '@sports/shared';
 import { currentInnings, formatOvers, otherTeam, runRate, type Chip as ChipData, type CricketState } from '@sports/sports-engine/src/cricket';
@@ -196,12 +197,15 @@ export function LiveMatch({ initial, card, canScore }: { initial: MatchSnapshot;
   );
 }
 
-export function MatchHeader({ card, sportName, canScore }: { card: MatchCardData; sportName: string; canScore: boolean }) {
+export function MatchHeader({ card, sportName, canScore, scheduleVenues }: { card: MatchCardData; sportName: string; canScore: boolean; /** Set for an admin: venue suggestions for the time and venue editor, shown while the match has not started. */ scheduleVenues?: string[] }) {
   const finished = card.status === 'completed' || card.status === 'abandoned';
   return (
     <>
       <nav className="rx-crumbs" aria-label="Breadcrumb">
-        <Link href="/matches">MATCHES</Link>/<Link href={`/sports/${card.sportKey}`}>{sportName.toUpperCase()}</Link>/<span aria-current="page">{card.teamA.toUpperCase()} VS {card.teamB.toUpperCase()}</span>
+        {card.tournamentId
+          ? <><Link href="/tournaments">TOURNAMENTS</Link>/<Link href={`/tournaments/${card.tournamentId}`}>{(card.competition ?? 'TOURNAMENT').toUpperCase()}</Link>/</>
+          : <><Link href="/matches">MATCHES</Link>/<Link href={`/sports/${card.sportKey}`}>{sportName.toUpperCase()}</Link>/</>}
+        <span aria-current="page">{card.teamA.toUpperCase()} VS {card.teamB.toUpperCase()}</span>
       </nav>
       <div className="mp-title">
         <div>
@@ -209,6 +213,7 @@ export function MatchHeader({ card, sportName, canScore }: { card: MatchCardData
           <h1>{card.teamA} <span>vs</span> {card.teamB}</h1>
         </div>
         <div className="mp-actions">
+          {scheduleVenues && card.status === 'scheduled' && card.seq === 0 && <EditMatchSchedule matchId={card.id} scheduledAt={card.scheduledAt} venue={card.venue} venues={scheduleVenues} />}
           {canScore && !finished && <Link href={`/score/${card.id}`} className="mx-btn mx-btn-lg" data-variant="amber">OPEN SCORER</Link>}
           <Link href={`/display/${card.id}`} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE ↗</Link>
         </div>

@@ -1,3 +1,4 @@
+import { matchHref } from '@/lib/match-href';
 import Link from 'next/link';
 import { Avatar } from '@/components/ratch/avatar';
 import { bowlText, summarize, type PlayerProfile } from '@/lib/player-stats';
@@ -59,7 +60,7 @@ export function PlayerView({ profile, sport, basePath, identity }: { profile: Pl
         <span className="pf-title">{list.length ? `${sportName.toUpperCase()} MATCHES · ${list.length}` : 'MATCHES'}</span>
         {list.length === 0 && <div className="pf-empty">No matches played yet.</div>}
         {list.map((m, i) => (
-          <Link key={m.id} href={`/sports/${m.sportKey}/matches/${m.id}`} className="pf-row" style={{ borderRadius: stack(i, list.length) }}>
+          <Link key={m.id} href={matchHref(m)} className="pf-row" style={{ borderRadius: stack(i, list.length) }}>
             <span className="pf-res" data-r={m.result}>{m.result}</span>
             <span className="pf-date">{m.date}</span>
             <span className="pf-vs"><b>{m.team} vs {m.opp}</b><small>{m.comp}</small></span>

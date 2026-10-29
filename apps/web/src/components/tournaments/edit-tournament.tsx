@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FIXTURE_TYPES, FORMATS, minTeamsFor, type FormatKey, type TournamentMeta } from '@sports/shared';
+import { FIXTURE_TYPES, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FormatKey, type TournamentMeta } from '@sports/shared';
 import { addVenue } from '@/app/create/actions';
 import { updateTournament } from '@/app/tournaments/[id]/actions';
 import '@/components/teams/team-manage.css';
@@ -19,7 +19,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
   const [open, setOpen] = useState(false);
   const init = () => ({
     name, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate, venueIds: meta.venues.map((v) => v.id).filter((vid) => allVenues.some((v) => v.id === vid)), formatKey: meta.formatKey as FormatKey,
-    overs: meta.overs ?? 20, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
+    perTeam: fitMatchesPerTeam(teamCount, meta.matchesPerTeam) ?? Math.max(1, teamCount - 1), overs: meta.overs ?? 20, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
     perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime, restDay: meta.schedule.restDay,
   });
   const [f, setF] = useState(init);
@@ -36,7 +36,9 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
   const need = minTeamsFor(f.formatKey, f.qualify);
   const tooFew = (formatChanged || f.qualify !== meta.qualify) && teamCount < need;
   // a Table makes its fixtures again when the things they depend on change; a Custom list is cleared when the type changes
-  const scheduleTouched = f.startDate !== meta.schedule.startDate || f.perDay !== meta.schedule.perDay || f.firstMatchTime !== meta.schedule.firstMatchTime || f.restDay !== meta.schedule.restDay || f.qualify !== meta.qualify || (cricket && f.overs !== (meta.overs ?? 20)) || f.venueIds.join() !== meta.venues.map((v) => v.id).join();
+  const perTeamOptions = matchesPerTeamOptions(teamCount);
+  const wantPerTeam = f.perTeam >= teamCount - 1 ? undefined : fitMatchesPerTeam(teamCount, f.perTeam);
+  const scheduleTouched = wantPerTeam !== fitMatchesPerTeam(teamCount, meta.matchesPerTeam) || f.startDate !== meta.schedule.startDate || f.perDay !== meta.schedule.perDay || f.firstMatchTime !== meta.schedule.firstMatchTime || f.restDay !== meta.schedule.restDay || f.qualify !== meta.qualify || (cricket && f.overs !== (meta.overs ?? 20)) || f.venueIds.join() !== meta.venues.map((v) => v.id).join();
   const remakes = !started && fixtureCount > 0 && table && (formatChanged || scheduleTouched);
   const types: FormatKey[] = FIXTURE_TYPES.includes(meta.formatKey as 'lk' | 'custom') ? [...FIXTURE_TYPES] : [meta.formatKey, ...FIXTURE_TYPES];
   const ties: Tie[] = cricket ? ['NRR', 'HEAD TO HEAD', 'WINS'] : ['DIFFERENCE', 'HEAD TO HEAD', 'WINS'];
@@ -56,7 +58,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
     try {
       const r = await updateTournament({
         tournamentId: id, name: f.name, startDate: f.startDate, endDate: f.endDate, venueIds: f.venueIds, formatKey: f.formatKey, ...(cricket ? { overs: f.overs } : {}),
-        points: f.points, qualify: f.qualify, tiebreak: f.tiebreak, schedule: { perDay: f.perDay, firstMatchTime: f.firstMatchTime, restDay: f.restDay }, tzOffset: new Date().getTimezoneOffset(),
+        points: f.points, qualify: f.qualify, ...(table && wantPerTeam ? { matchesPerTeam: wantPerTeam } : {}), tiebreak: f.tiebreak, schedule: { perDay: f.perDay, firstMatchTime: f.firstMatchTime, restDay: f.restDay }, tzOffset: new Date().getTimezoneOffset(),
       });
       if (r.error) { setError(r.error); return; }
       setOpen(false);
@@ -74,7 +76,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
         <div className="tm-modal" onClick={() => setOpen(false)}>
           <form className="tm-dialog" role="dialog" aria-label="Edit tournament" style={{ maxWidth: 600, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(); }}>
             <h2>Edit tournament</h2>
-            {started && <p>The tournament has started, so the fixture type, how many play on, the overs and the daily schedule are locked. Everything else can still change.</p>}
+            {started && <p>The tournament has started, so the fixture type, how many play on, the matches per team, the overs and the daily schedule are locked. Everything else can still change.</p>}
 
             <label><span className="lbl">NAME</span><input value={f.name} maxLength={80} onChange={(e) => set('name', e.target.value)} /></label>
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
@@ -104,6 +106,14 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
               {remakes && <p style={{ color: 'var(--amber)' }}>Saving makes the fixtures again, replacing the {fixtureCount} you have now{formatChanged ? ' (including any you pasted in)' : ''}. Nothing has been played yet.</p>}
               {tooFew && <p style={{ color: 'var(--red-text)' }}>{FORMATS[f.formatKey].label} needs at least {minTeamsFor(f.formatKey)} teams and this tournament has {teamCount}.</p>}
             </div>
+
+            {table && teamCount >= 2 && (
+              <div style={box}>
+                <span className="lbl">MATCHES EACH TEAM PLAYS IN THE LEAGUE</span>
+                <div style={row}>{perTeamOptions.map((n) => { const on = (wantPerTeam ?? teamCount - 1) === n; return <button key={n} type="button" aria-pressed={on} disabled={started} className="tm-btn" style={pill(on, started && !on)} onClick={() => set('perTeam', n)}>{n === teamCount - 1 ? `${n} · EVERYONE` : n}</button>; })}</div>
+                <p>{wantPerTeam ? `Each team plays ${wantPerTeam} of the other ${teamCount - 1}: ${(teamCount * wantPerTeam) / 2} league matches instead of ${(teamCount * (teamCount - 1)) / 2}.` : `Everyone plays everyone once: ${(teamCount * (teamCount - 1)) / 2} league matches.`}{teamCount % 2 === 1 ? ' With an odd number of teams every team must play an even number.' : ''}</p>
+              </div>
+            )}
 
             {showQualify && (
               <div style={box}>

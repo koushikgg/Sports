@@ -1,8 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { FIXTURE_TYPES, FORMATS, TIEBREAKS, VISIBILITIES, minTeamsFor, type FormatKey, type Visibility } from '@sports/shared';
-import { addDays, planTournament, previewRound1 } from '@sports/sports-engine/src/tournament-plan';
+import { FIXTURE_TYPES, FORMATS, TIEBREAKS, VISIBILITIES, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FormatKey, type Visibility } from '@sports/shared';
+import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
+import { addDays, planTournament } from '@sports/sports-engine/src/tournament-plan';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
 import { addTeam, addVenue, createMatchAction, publishTournament } from '@/app/create/actions';
@@ -32,7 +33,7 @@ interface Props {
 
 type Done =
   | { kind: 'tournament'; id: string; name: string; teams: number; table: boolean; plan: { totalMatches: number; matchDays: number } }
-  | { kind: 'match'; id: string; title: string; when: string };
+  | { kind: 'match'; id: string; tournamentId: string | null; title: string; when: string };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -124,7 +125,7 @@ export function Wizard(props: Props) {
 
   const [t, setT] = useState({
     name: '', sportId: cricket?.id ?? sports[0]?.id ?? '', start: '', end: '', venueIds: [] as string[],
-    formatKey: 'lk' as FormatKey, overs: 20, points: { win: 2, tie: 1, noResult: 1 }, qualify: 4 as 2 | 4,
+    formatKey: 'lk' as FormatKey, overs: 20, points: { win: 2, tie: 1, noResult: 1 }, qualify: 4 as 2 | 4, perTeam: null as number | null,
     tiebreak: 'NRR' as (typeof TIEBREAKS)[number], teamIds: [] as string[], perDay: 2, firstTime: '18:00', rest: false,
   });
 
@@ -189,8 +190,23 @@ export function Wizard(props: Props) {
 
   // ---- schedule maths (shared with the server)
   const teamCount = t.teamIds.length;
-  const plan = planTournament({ formatKey: t.formatKey, teams: teamCount, qualify: t.qualify, perDay: t.perDay, restDay: t.rest, startDate: t.start, endDate: t.end });
-  const round1 = previewRound1(t.teamIds, t.perDay, t.start || today(), t.firstTime);
+  // matches per team follows the team count: a value that no longer fits drops to the nearest that does
+  const perTeam = t.formatKey === 'lk' ? fitMatchesPerTeam(teamCount, t.perTeam) : undefined;
+  const perTeamOptions = matchesPerTeamOptions(teamCount);
+  const basePlan = planTournament({ formatKey: t.formatKey, teams: teamCount, qualify: t.qualify, matchesPerTeam: perTeam, perDay: t.perDay, restDay: t.rest, startDate: t.start, endDate: t.end });
+  // A Table's fixtures are made from these settings, so the preview is the real thing: the same maths the server runs.
+  const generated = t.formatKey === 'lk' && teamCount >= 2
+    ? generateTableFixtures({
+        teams: t.teamIds.map((id) => ({ id, name: teamList.find((x) => x.id === id)?.name ?? '' })), qualify: t.qualify, matchesPerTeam: perTeam, startDate: t.start || today(),
+        perDay: t.perDay, firstMatchTime: t.firstTime, restDay: t.rest, gapMinutes: gapMinutesFor(tIsCricket ? 'cricket' : 'other', t.overs), venues: [], tz: 0,
+      })
+    : [];
+  const leagueGen = generated.filter((f) => f.a.kind === 'team');
+  const lastGen = generated.at(-1)?.date ?? '';
+  const plan = generated.length
+    ? { ...basePlan, leagueMatches: leagueGen.length, knockoutMatches: generated.length - leagueGen.length, totalMatches: generated.length, matchDays: new Set(generated.map((f) => f.date)).size, lastMatchDate: lastGen, overrun: !!(t.end && lastGen > t.end) }
+    : basePlan;
+  const round1 = leagueGen.filter((f) => f.round === 'Round 1').slice(0, 5).map((f) => ({ a: (f.a as { id: string }).id, b: (f.b as { id: string }).id, date: f.date, time: f.time }));
 
   // ---- validity per step
   const minTeams = minTeamsFor(t.formatKey, t.qualify);
@@ -250,7 +266,7 @@ export function Wizard(props: Props) {
       if (mode === 'tournament') {
         const r = await publishTournament({
           name: t.name, sportId: t.sportId, startDate: t.start, endDate: t.end, venueIds: t.venueIds, formatKey: t.formatKey,
-          ...(tIsCricket ? { overs: t.overs } : {}), points: t.points, qualify: t.qualify, tiebreak: t.tiebreak, teamIds: t.teamIds,
+          ...(tIsCricket ? { overs: t.overs } : {}), points: t.points, qualify: t.qualify, ...(perTeam ? { matchesPerTeam: perTeam } : {}), tiebreak: t.tiebreak, teamIds: t.teamIds,
           schedule: { perDay: t.perDay, firstMatchTime: t.firstTime, restDay: t.rest }, tzOffset,
         });
         if (!r.ok) return setServerError(r.error);
@@ -261,7 +277,7 @@ export function Wizard(props: Props) {
           rules: m.rules, lineups: m.lineups, scorerId: m.scorerId, umpires: [m.ump1, m.ump2].filter((u) => u.trim()), visibility: m.visibility,
         });
         if (!r.ok) return setServerError(r.error);
-        setDone({ kind: 'match', id: r.id, title: `${teamById(m.teamAId)?.name} vs ${teamById(m.teamBId)?.name}`, when: `${fmtD(m.date)} · ${fmtT(m.time)}` });
+        setDone({ kind: 'match', id: r.id, tournamentId: m.tournamentId, title: `${teamById(m.teamAId)?.name} vs ${teamById(m.teamBId)?.name}`, when: `${fmtD(m.date)} · ${fmtT(m.time)}` });
       }
     } catch {
       setServerError('Something went wrong. Check your connection and try again.');
@@ -379,20 +395,27 @@ export function Wizard(props: Props) {
           <Field label="FIRST MATCH STARTS"><input type="time" className="cw-input" value={t.firstTime} onChange={(e) => setT({ ...t, firstTime: e.target.value })} /></Field>
         </div>
         <ToggleRow on={t.rest} onChange={() => setT({ ...t, rest: !t.rest })} title="Rest day between rounds" hint="No team plays on consecutive days" />
+        {t.formatKey === 'lk' && teamCount >= 2 && (
+          <div className="cw-block">
+            <Label>MATCHES EACH TEAM PLAYS IN THE LEAGUE</Label>
+            <Pills value={perTeam ?? teamCount - 1} onPick={(v) => setT({ ...t, perTeam: v >= teamCount - 1 ? null : v })} options={perTeamOptions.map((v) => ({ v, l: v === teamCount - 1 ? `${v} · EVERYONE` : String(v) }))} />
+            <p className="cw-muted">{perTeam ? `Each team plays ${perTeam} of the other ${teamCount - 1}, so ${leagueGen.length} league matches instead of ${(teamCount * (teamCount - 1)) / 2}.` : `Everyone plays everyone once: ${leagueGen.length} league matches.`}{teamCount % 2 === 1 ? ' With an odd number of teams every team must play an even number of matches.' : ''}</p>
+          </div>
+        )}
         <div className="cw-kpis">
           {[['LEAGUE MATCHES', String(plan.leagueMatches)], ['KNOCKOUTS', String(plan.knockoutMatches)], ['MATCH DAYS', String(plan.matchDays)], ['LAST MATCH', fmtD(plan.lastMatchDate)]].map(([k, v], i) => (
             <div key={k}><span className="lbl lbl-sm">{k}</span><b data-bad={i === 3 && plan.overrun ? 'true' : undefined}>{v}</b></div>
           ))}
         </div>
-        <div className="cw-block"><Label>ROUND 1 · PREVIEW ONLY</Label>
+        {t.formatKey === 'lk' && <div className="cw-block"><Label>ROUND 1 · YOUR FIXTURES START LIKE THIS</Label>
           <div className="cw-fixtures">
             {round1.length === 0 && <p className="cw-muted">Select teams to preview round one.</p>}
             {round1.map((f, i) => (
               <div key={i}><span>{fmtD(f.date).toUpperCase()} · {fmtT(f.time)}</span><b>{teamById(f.a)?.name}</b><i>VS</i><b>{teamById(f.b)?.name}</b></div>
             ))}
           </div>
-          <p className="cw-muted">These pairings are a preview of the format. No fixtures are created when you publish.</p>
-        </div>
+          <p className="cw-muted">These are the first pairings of the fixtures made when you publish. They are made again if you change the teams or settings before the tournament starts.</p>
+        </div>}
       </>
     );
 
@@ -603,7 +626,7 @@ export function Wizard(props: Props) {
                   </>
                 ) : (
                   <>
-                    <Link href={`/sports/cricket/matches/${done.id}`} className="cw-btn" data-variant="blue">VIEW MATCH</Link>
+                    <Link href={done.tournamentId ? `/tournaments/${done.tournamentId}/matches/${done.id}` : `/sports/cricket/matches/${done.id}`} className="cw-btn" data-variant="blue">VIEW MATCH</Link>
                     <Link href={`/score/${done.id}`} className="cw-btn" data-variant="amber">OPEN SCORER</Link>
                     {props.lockedTournament && <Link href={`/tournaments/${props.lockedTournament.id}`} className="cw-btn" data-variant="gray">BACK TO TOURNAMENT</Link>}
                     <button type="button" className="cw-btn" data-variant="gray" onClick={() => { setDone(null); setStep(0); setVisited(0); setM((x) => ({ ...x, teamAId: '', teamBId: '', lineups: { a: emptyLineup(), b: emptyLineup() } })); }}>CREATE ANOTHER</button>

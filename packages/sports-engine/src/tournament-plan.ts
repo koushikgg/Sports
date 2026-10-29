@@ -29,16 +29,18 @@ export function planTournament(p: {
   restDay: boolean;
   startDate: string;
   endDate: string;
+  /** Table only: matches each team plays instead of everyone. */
+  matchesPerTeam?: number;
 }): Plan {
   const n = p.teams;
   if (p.formatKey === 'custom') return { leagueMatches: 0, knockoutMatches: 0, totalMatches: 0, rounds: 0, matchDays: 0, lastMatchDate: '', overrun: false };
   const half = Math.ceil(n / 2);
   const leagueMatches =
-    p.formatKey === 'ko' ? 0 : p.formatKey === 'groups' ? 2 * ((half * (half - 1)) / 2) : (n * (n - 1)) / 2;
+    p.formatKey === 'ko' ? 0 : p.formatKey === 'groups' ? 2 * ((half * (half - 1)) / 2) : p.formatKey === 'lk' && p.matchesPerTeam ? (n * p.matchesPerTeam) / 2 : (n * (n - 1)) / 2;
   const knockoutMatches =
     p.formatKey === 'ko' ? Math.max(0, n - 1) : p.formatKey === 'league' ? 0 : p.formatKey === 'groups' ? 3 : p.qualify === 2 ? 1 : 3;
   const totalMatches = leagueMatches + knockoutMatches;
-  const rounds = p.formatKey === 'ko' ? Math.ceil(Math.log2(Math.max(2, n))) : Math.max(1, n - 1);
+  const rounds = p.formatKey === 'ko' ? Math.ceil(Math.log2(Math.max(2, n))) : Math.max(1, p.formatKey === 'lk' && p.matchesPerTeam ? p.matchesPerTeam : n - 1);
   const matchDays = Math.ceil(totalMatches / p.perDay) + (p.restDay ? Math.max(0, rounds - 1) : 0);
   const lastMatchDate = p.startDate ? addDays(p.startDate, Math.max(0, matchDays - 1)) : '';
   return { leagueMatches, knockoutMatches, totalMatches, rounds, matchDays, lastMatchDate, overrun: !!(p.endDate && lastMatchDate && lastMatchDate > p.endDate) };

@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { and, count, eq, getDb, inArray, matches, sql, sports, teams, tournaments, venues } from '@sports/db';
-import { FORMATS, minTeamsFor, tournamentEditSchema, type TournamentMeta } from '@sports/shared';
+import { FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, tournamentEditSchema, type TournamentMeta } from '@sports/shared';
 import { rebuildFixtures, tournamentStarted } from '@sports/scoring';
 import { planTournament, toInstant } from '@sports/sports-engine/src/tournament-plan';
 import { audit, requireRole } from '@/lib/guard';
@@ -23,7 +23,11 @@ async function load(id: string) {
 
 /** The planned match counts follow the team list. */
 function replan(meta: TournamentMeta, teamCount: number): TournamentMeta {
-  const p = planTournament({ formatKey: meta.formatKey, teams: teamCount, qualify: meta.qualify, perDay: meta.schedule.perDay, restDay: meta.schedule.restDay, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate });
+  // matches per team follows the team count: a value that no longer fits drops to the nearest that does
+  const perTeam = meta.formatKey === 'lk' ? fitMatchesPerTeam(teamCount, meta.matchesPerTeam) : undefined;
+  const { matchesPerTeam: _old, ...rest } = meta;
+  meta = { ...rest, ...(perTeam ? { matchesPerTeam: perTeam } : {}) };
+  const p = planTournament({ formatKey: meta.formatKey, teams: teamCount, qualify: meta.qualify, matchesPerTeam: perTeam, perDay: meta.schedule.perDay, restDay: meta.schedule.restDay, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate });
   return { ...meta, plan: { leagueMatches: p.leagueMatches, knockoutMatches: p.knockoutMatches, totalMatches: p.totalMatches, matchDays: p.matchDays, lastMatchDate: p.lastMatchDate } };
 }
 
@@ -116,10 +120,15 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
       v.qualify !== meta.qualify && 'how many qualify',
       cricket && (v.overs ?? meta.overs) !== meta.overs && 'the overs',
       !sameSchedule && 'the daily schedule',
+      meta.formatKey === 'lk' && fitMatchesPerTeam(meta.teams.length, v.matchesPerTeam) !== fitMatchesPerTeam(meta.teams.length, meta.matchesPerTeam) && 'the matches per team',
     ].filter(Boolean);
     if (locked.length) return { error: `The tournament has started, so ${locked.join(' and ')} can’t change.` };
   }
   const formatChanged = v.formatKey !== meta.formatKey;
+  const table0 = v.formatKey === 'lk';
+  if (table0 && v.matchesPerTeam !== undefined && !matchesPerTeamOptions(meta.teams.length).includes(v.matchesPerTeam)) {
+    return { error: `${v.matchesPerTeam} matches per team doesn’t fit ${meta.teams.length} teams. Pick one of ${matchesPerTeamOptions(meta.teams.length).join(', ')}.` };
+  }
   const need = minTeamsFor(v.formatKey, v.qualify);
   if ((formatChanged || v.qualify !== meta.qualify) && meta.teams.length < need) {
     return { error: `${FORMATS[v.formatKey].label} needs at least ${need} teams, and this tournament has ${meta.teams.length}.` };
@@ -131,10 +140,13 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
   const byId = new Map(venueRows.map((x) => [x.id, x]));
 
   const overs = cricket ? (v.overs ?? meta.overs ?? 20) : undefined;
-  const plan = planTournament({ formatKey: v.formatKey, teams: meta.teams.length, qualify: v.qualify, perDay: v.schedule.perDay, restDay: v.schedule.restDay, startDate: v.startDate, endDate: v.endDate });
+  const perTeam = table0 ? fitMatchesPerTeam(meta.teams.length, v.matchesPerTeam) : undefined;
+  const plan = planTournament({ formatKey: v.formatKey, teams: meta.teams.length, qualify: v.qualify, matchesPerTeam: perTeam, perDay: v.schedule.perDay, restDay: v.schedule.restDay, startDate: v.startDate, endDate: v.endDate });
+  const { matchesPerTeam: _was, ...metaBase } = meta;
   const next: TournamentMeta = {
-    ...meta,
+    ...metaBase,
     formatKey: v.formatKey,
+    ...(perTeam ? { matchesPerTeam: perTeam } : {}),
     ...(overs ? { overs } : {}),
     venues: v.venueIds.map((id) => ({ id, name: byId.get(id)!.name })),
     points: v.points,
@@ -163,7 +175,7 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
   const table = v.formatKey === 'lk';
   const scheduleChanged =
     v.startDate !== meta.schedule.startDate || !sameSchedule || v.qualify !== meta.qualify || overs !== meta.overs ||
-    v.venueIds.join() !== meta.venues.map((x) => x.id).join();
+    v.venueIds.join() !== meta.venues.map((x) => x.id).join() || perTeam !== fitMatchesPerTeam(meta.teams.length, meta.matchesPerTeam);
   if (!started && (formatChanged || (table && scheduleChanged))) cleared = (await rebuildFixtures(v.tournamentId)).removed;
   else if (!started && overs && overs !== meta.overs) {
     await db

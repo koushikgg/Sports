@@ -1,3 +1,4 @@
+import { matchHref } from '@/lib/match-href';
 import type { MetadataRoute } from 'next';
 import { getEnabledSports, listMatchCards, SITE_URL } from '@/lib/queries';
 
@@ -10,7 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/sports`, changeFrequency: 'daily' },
     ...sports.map((s) => ({ url: `${SITE_URL}/sports/${s.key}`, changeFrequency: 'hourly' as const })),
     ...matches.map((m) => ({
-      url: `${SITE_URL}/sports/${m.sportKey}/matches/${m.id}`,
+      url: `${SITE_URL}${matchHref(m)}`,
       changeFrequency: m.status === 'live' ? ('always' as const) : ('weekly' as const),
     })),
   ];

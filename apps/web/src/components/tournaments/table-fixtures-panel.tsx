@@ -5,7 +5,7 @@ import { regenerateTableFixtures } from '@/app/tournaments/[id]/fixtures-actions
 import '@/components/teams/team-manage.css';
 
 /** Admin note on a Table tournament's Fixtures tab: the fixtures make themselves, and can be made again until play starts. */
-export function TableFixturesPanel({ tournamentId, teamCount, qualify, fixtureCount, started }: { tournamentId: string; teamCount: number; qualify: 2 | 4; fixtureCount: number; started: boolean }) {
+export function TableFixturesPanel({ tournamentId, teamCount, qualify, matchesPerTeam, fixtureCount, started }: { tournamentId: string; teamCount: number; qualify: 2 | 4; matchesPerTeam?: number; fixtureCount: number; started: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState(false);
@@ -20,12 +20,13 @@ export function TableFixturesPanel({ tournamentId, teamCount, qualify, fixtureCo
     } catch { setMsg({ text: 'Something went wrong. Try again.', bad: true }); } finally { setBusy(false); }
   };
 
-  const league = (teamCount * (teamCount - 1)) / 2;
+  const each = matchesPerTeam ?? teamCount - 1;
+  const league = (teamCount * each) / 2;
   return (
     <div className="tm-panel" style={{ marginBottom: 16 }}>
       <span className="lbl">TABLE · FIXTURES ARE MADE FOR YOU</span>
       <span className="tm-note">
-        Every team plays every other team once ({league} matches), then {qualify === 4 ? 'the top 4 play semi-finals (1st v 4th, 2nd v 3rd) and a final' : 'the top 2 play the final'}. The knockout sides fill in when the league is done.
+        {matchesPerTeam ? `Each team plays ${matchesPerTeam} of the other ${teamCount - 1} (${league} league matches)` : `Every team plays every other team once (${league} matches)`}, then {qualify === 4 ? 'the top 4 play semi-finals (1st v 4th, 2nd v 3rd) and a final' : 'the top 2 play the final'}. The knockout sides fill in when the league is done.
         {started ? ' The tournament has started, so the fixtures are locked.' : ' They are made again whenever you change the teams or edit the tournament, until it starts.'}
       </span>
       {!started && (

@@ -5,6 +5,7 @@ import type { TournamentDetail } from '@sports/scoring';
 import { minTeamsFor } from '@sports/shared';
 import { Leaderboards } from './leaderboards';
 import { STAGES, stageTitle } from '@sports/sports-engine/src/fixture-import';
+import { EditMatchSchedule, EditPendingFixture } from '@/components/match/edit-schedule';
 import { EditTournament } from './edit-tournament';
 import { FixturesImport } from './fixtures-import';
 import { TableFixturesPanel } from './table-fixtures-panel';
@@ -40,6 +41,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues 
   // oldest first. A Table tournament shows its league rounds, then Semi-finals and the Final, each under its own heading.
   // Imported fixtures still waiting on a result sit alongside real matches.
   type Item = { at: string; m?: (typeof t.matches)[number]; p?: (typeof t.pending)[number] };
+  const venueNames = (t.meta?.venues ?? []).map((v) => v.name);
   const stageLike = (r: string | null | undefined): r is string => !!r && ((STAGES as readonly string[]).includes(r) || /^Round \d+$/i.test(r));
   const dayText = (at: string) => (at === '9999' ? 'DATE TO BE CONFIRMED' : new Date(at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase());
   const roundOf = (it: Item) => it.m?.round ?? it.p?.round ?? null;
@@ -81,7 +83,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues 
         )}
 
         {active === 'fixtures' && isAdmin && t.meta?.formatKey === 'lk' && (
-          <TableFixturesPanel tournamentId={t.id} teamCount={t.meta.teams.length} qualify={t.meta.qualify} fixtureCount={t.fixtureCount} started={t.started} />
+          <TableFixturesPanel tournamentId={t.id} teamCount={t.meta.teams.length} qualify={t.meta.qualify} matchesPerTeam={t.meta.matchesPerTeam} fixtureCount={t.fixtureCount} started={t.started} />
         )}
 
         {active === 'fixtures' && isAdmin && t.meta && t.meta.formatKey !== 'lk' && fixturePrompt && (
@@ -112,7 +114,10 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues 
                           <b className="tn-a" data-dim={p.openA ? 'true' : undefined}>{p.labelA}</b>
                           <span className="tn-score">{p.time}</span>
                           <b data-dim={p.openB ? 'true' : undefined}>{p.labelB}</b>
-                          <span className="lbl">{p.openA || p.openB ? 'TEAMS TBD' : `MATCH ${p.no}`}</span>
+                          <span style={{ display: 'flex', gap: 10, alignItems: 'center', justifySelf: 'end' }}>
+                            <span className="lbl">{p.openA || p.openB ? 'TEAMS TBD' : `MATCH ${p.no}`}</span>
+                            {isAdmin && <EditPendingFixture tournamentId={t.id} no={p.no} date={p.date} time={p.time} venue={p.venue} venues={venueNames} small />}
+                          </span>
                         </div>
                       );
                     }
@@ -127,7 +132,10 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues 
                         <b className="tn-a" data-dim={m.winner === 'b' ? 'true' : undefined}>{m.teamA}</b>
                         <span className="tn-score">{g === 'up' || !started ? time : `${(sa ?? '').split(' ')[0]} – ${(sb ?? '').split(' ')[0]}`}</span>
                         <b data-dim={m.winner === 'a' ? 'true' : undefined}>{m.teamB}</b>
-                        <Link href={`/sports/${m.sportKey}/matches/${m.id}`} className="mx-btn" data-variant={g === 'live' ? 'blue' : 'gray'}>{g === 'live' ? 'WATCH' : g === 'up' ? 'DETAILS' : 'SCORECARD'}</Link>
+                        <span style={{ display: 'flex', gap: 8, alignItems: 'center', justifySelf: 'end' }}>
+                          {isAdmin && m.status === 'scheduled' && m.seq === 0 && <EditMatchSchedule matchId={m.id} scheduledAt={m.scheduledAt} venue={m.venue} venues={venueNames} label="EDIT" small />}
+                                                  <Link href={`/tournaments/${t.id}/matches/${m.id}`} className="mx-btn" data-variant={g === 'live' ? 'blue' : 'gray'}>{g === 'live' ? 'WATCH' : g === 'up' ? 'DETAILS' : 'SCORECARD'}</Link>
+                        </span>
                       </div>
                     );
                   })}

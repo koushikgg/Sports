@@ -4,6 +4,8 @@ import { avatarSrc } from '@/lib/avatar';
 export interface PlayerMatch {
   id: string;
   sportKey: string;
+  /** The tournament it belongs to, so its page can be found under it. */
+  tournamentId: string | null;
   sport: string;
   result: 'W' | 'L' | 'T';
   date: string;
@@ -67,7 +69,7 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
   const rows = teamIds.length || lineupMatchIds.length
     ? await db
         .select({
-          id: matches.id, sportKey: sports.key, sport: sports.name, teamAId: matches.teamAId, teamBId: matches.teamBId, a: A.name, b: B.name,
+          id: matches.id, sportKey: sports.key, tournamentId: matches.tournamentId, sport: sports.name, teamAId: matches.teamAId, teamBId: matches.teamBId, a: A.name, b: B.name,
           at: sql<string>`coalesce(${matches.scheduledAt}, ${matches.createdAt})`, result: matches.result, tournament: tournaments.name,
           inn: sql<InningsRow[]>`(select coalesce(jsonb_agg(jsonb_build_object('team', i->>'battingTeamId', 'runs', i->'runs', 'wkts', i->'wickets', 'mine', ${mine}, 'bowl', i->'bowlers'->${playerId}::text, 'catches', (select count(*) from jsonb_each(i->'batters') b where b.value->'out'->>'kind' = 'caught' and b.value->'out'->>'fielderId' = ${playerId}::text))), '[]'::jsonb) from jsonb_array_elements(${matchStates.state}->'innings') i)`,
         })
@@ -99,7 +101,7 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
     const bowled = inn.map((i) => i.bowl).filter((b): b is NonNullable<InningsRow['bowl']> => !!b && b.legalBalls > 0);
     const winner = (r.result as { winnerTeamId?: string } | null)?.winnerTeamId;
     out.push({
-      id: r.id, sportKey: r.sportKey, sport: r.sport,
+      id: r.id, sportKey: r.sportKey, tournamentId: r.tournamentId, sport: r.sport,
       result: winner ? (winner === myTeam ? 'W' : 'L') : 'T',
       date: day.format(new Date(r.at)).toUpperCase(),
       team: myTeam === r.teamAId ? r.a : r.b, opp: myTeam === r.teamAId ? r.b : r.a,

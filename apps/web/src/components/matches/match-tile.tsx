@@ -1,4 +1,5 @@
 'use client';
+import { matchHref } from '@/lib/match-href';
 import Link from 'next/link';
 import type { MatchSnapshot, ScoreSummary } from '@sports/shared';
 import type { MatchCardData } from '@/lib/queries';
@@ -38,7 +39,7 @@ function View({
   const started = hasStarted(summary);
   const badge = group === 'live' ? (status === 'paused' ? 'PAUSED' : 'LIVE') : group === 'up' ? dayBadge(m.scheduledAt, now) : status === 'abandoned' ? 'ABANDONED' : 'RESULT';
   const line = group === 'up' ? kickoffLine(m.scheduledAt, now) : summary.status || (status === 'abandoned' ? 'Match abandoned' : '');
-  const open = `/sports/${m.sportKey}/matches/${m.id}`;
+  const open = matchHref(m);
   const canOpenScorer = canScore && group !== 'ft';
 
   return (

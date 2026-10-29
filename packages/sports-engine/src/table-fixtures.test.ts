@@ -117,3 +117,70 @@ describe('table fixtures: the knockouts', () => {
     expect(generateTableFixtures(base(1))).toEqual([]);
   });
 });
+
+describe('table fixtures: fewer matches per team', () => {
+  const perTeam = (n: number, k: number, extra: Partial<TableInput> = {}) => {
+    const f = league(generateTableFixtures(base(n, { matchesPerTeam: k, ...extra })));
+    const count = new Map<string, number>();
+    for (const x of f) for (const t of [id(x.a), id(x.b)]) count.set(t, (count.get(t) ?? 0) + 1);
+    return { f, count };
+  };
+  const noRepeats = (f: ReturnType<typeof league>) => new Set(f.map((x) => [id(x.a), id(x.b)].sort().join('|'))).size === f.length;
+  const noDoubleBooking = (f: ReturnType<typeof league>) => {
+    const rounds = new Map<string, string[]>();
+    for (const x of f) rounds.set(x.round!, [...(rounds.get(x.round!) ?? []), id(x.a), id(x.b)]);
+    return [...rounds.values()].every((ids) => new Set(ids).size === ids.length);
+  };
+
+  it('an even field: every team plays exactly that many, nobody twice, none repeated', () => {
+    for (const [n, k] of [[8, 3], [8, 1], [8, 6], [6, 2], [4, 1], [10, 4]] as const) {
+      const { f, count } = perTeam(n, k);
+      expect(f).toHaveLength((n * k) / 2);
+      expect(teams(n).every((t) => count.get(t.id) === k)).toBe(true);
+      expect(noRepeats(f)).toBe(true);
+      expect(noDoubleBooking(f)).toBe(true);
+    }
+  });
+  it('an even field plays in exactly that many rounds', () => {
+    const { f } = perTeam(8, 3);
+    expect(new Set(f.map((x) => x.round)).size).toBe(3);
+  });
+  it('an odd field: every team still plays exactly that many', () => {
+    for (const [n, k] of [[7, 2], [7, 4], [7, 6], [5, 2], [5, 4], [9, 4], [11, 6]] as const) {
+      const { f, count } = perTeam(n, k);
+      expect(f).toHaveLength((n * k) / 2);
+      expect(teams(n).every((t) => count.get(t.id) === k)).toBe(true);
+      expect(noRepeats(f)).toBe(true);
+      expect(noDoubleBooking(f)).toBe(true);
+    }
+  });
+  it('an odd field takes about as many rounds as matches per team', () => {
+    const { f } = perTeam(9, 4);
+    expect(new Set(f.map((x) => x.round)).size).toBeLessThanOrEqual(6);
+  });
+  it('a value that does not fit the team count drops to one that does', () => {
+    const { f, count } = perTeam(7, 3); // odd teams cannot all play 3, so 2
+    expect(f).toHaveLength(7);
+    expect(teams(7).every((t) => count.get(t.id) === 2)).toBe(true);
+  });
+  it('everyone-plays-everyone when it is left out or as big as it can be', () => {
+    expect(league(generateTableFixtures(base(6)))).toHaveLength(15);
+    expect(league(generateTableFixtures(base(6, { matchesPerTeam: 5 })))).toHaveLength(15);
+    expect(league(generateTableFixtures(base(6, { matchesPerTeam: 50 })))).toHaveLength(15);
+  });
+  it('the knockouts are the same however few league matches there are', () => {
+    const f = generateTableFixtures(base(8, { matchesPerTeam: 2 }));
+    expect(f).toHaveLength(8 + 3);
+    expect(f.slice(8).map((x) => x.round)).toEqual(['Semi-final', 'Semi-final', 'Final']);
+    expect(f[8]).toMatchObject({ no: 9, a: { kind: 'rank', pos: 1 }, b: { kind: 'rank', pos: 4 } });
+  });
+  it('home and away stay roughly even', () => {
+    for (const [n, k] of [[8, 3], [7, 4], [10, 5]] as const) {
+      const { f } = perTeam(n, k);
+      for (const t of teams(n)) {
+        const d = f.filter((x) => id(x.a) === t.id).length - f.filter((x) => id(x.b) === t.id).length;
+        expect(Math.abs(d)).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+});

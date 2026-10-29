@@ -1,3 +1,4 @@
+import { matchHref } from '@/lib/match-href';
 import { notFound, redirect } from 'next/navigation';
 import '@sports/sports-engine/src/all';
 import { getMatchCard, getSnapshot } from '@sports/scoring';
@@ -16,7 +17,7 @@ export default async function ScorePage({ params }: { params: Promise<{ id: stri
   if (!snapshot || !card) notFound();
 
   // Role is enforced by the middleware; this adds the per-match rule (assigned scorer, finished matches).
-  if (!canScoreMatch(user, card)) redirect(`/sports/${card.sportKey}/matches/${id}`);
+  if (!canScoreMatch(user, card)) redirect(matchHref(card));
 
   if (snapshot.sportKey === 'cricket') return <CricketScorer initial={snapshot} venue={card.venue} />;
   return (
