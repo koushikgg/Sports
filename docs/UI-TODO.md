@@ -51,6 +51,21 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
     longer fits drops to the nearest that does. The top 2 / top 4 rows of the table are coloured.
   - Teams can't be added once the tournament has started (and the type, qualifiers, overs and daily schedule lock).
   - `league`, `ko` and `groups` still exist for tournaments made before this; the wizard and editor only offer Table and Custom.
+- [x] **Groups in the Custom JSON (format version 3).** The pasted file can have `"groups": [{ "name", "teams" }]`, a `"group"`
+  on each group-stage fixture, and knockout sides written `Group A Rank 1`. Each team must be in exactly one group; each
+  group must be a full round robin (every pair once); group matches can't be mixed across groups; knockout places can't come
+  from "Winner of Match N" of a group match, must come after that group's last match, and are used once. Each group has its
+  own points table (P W L T NR NRR Pts, top places marked) on the Standings tab; Fixtures groups matches under the group's
+  name, then Semi-final, Final. A group's places resolve once all of that group's matches are done; the semi-finals appear
+  when both groups they need are done, the final after the semi-finals. Copy prompt now has a strict typed schema.
+  **Second stage (format version 4):** a group can be made of places in earlier groups, e.g.
+  `{ "name": "Super Four", "from": ["Group A Rank 1", "Group A Rank 2", "Group B Rank 1", "Group B Rank 2"] }`. It plays its own
+  round robin (matches have `"group": "Super Four"` and the places as teams), has its own points table (a placeholder
+  table listing the places until they are known; counts only its own matches), and later rounds (quarter-finals, semi-finals,
+  final) take places from any group: "Super Four Rank 1". Groups are listed in order; a place can feed one later group or one
+  knockout match, never two. Not carried over: points from the first stage don't carry into the second.
+  Not done: a Bracket tab built from the real knockout fixtures (group tournaments hide the projected bracket), a manual
+  override for ties the tiebreak can't split, creating groups from the wizard (JSON only).
 - [ ] Table fixtures are always cricket-style matches with no scorer or playing XI; assigning them in bulk is still open.
 - [ ] A Table tournament in a sport with no engine (foosball) saves the generated fixtures as a schedule only, and the
   knockout can't advance until results can be recorded.

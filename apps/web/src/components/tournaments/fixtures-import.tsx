@@ -31,6 +31,11 @@ export function FixturesImport({ tournamentId, prompt, teamCount, fixtureCount, 
   const [json, setJson] = useState('');
   const [busy, setBusy] = useState<'preview' | 'create' | null>(null);
   const [parse, setParse] = useState<FixtureParse | null>(null);
+  // preview rows grouped by round, rounds in the order they are first played, matches by time inside each
+  const groups = (parse?.stages ?? []).map((st) => ({
+    name: st.name,
+    rows: parse!.rows.filter((r) => (r.round ?? 'Matches') === st.name).sort((x, y) => `${x.date} ${x.time}`.localeCompare(`${y.date} ${y.time}`) || x.no - y.no),
+  }));
   const setError = (m: string | null) => { if (m) toast.error(m); };
   const [confirm, setConfirm] = useState<'replace' | 'clear' | null>(null);
   const tz = () => new Date().getTimezoneOffset();
@@ -124,11 +129,15 @@ export function FixturesImport({ tournamentId, prompt, teamCount, fixtureCount, 
                 {parse.notes.map((n, i) => <li key={i}>{n}</li>)}
               </ul>
             )}
-            <div className="tm-list" aria-label="Fixture preview">
-              {parse.rows.map((r, i) => {
-                const bad = r.issues.some((x) => x.level === 'error');
-                const warn = !bad && r.issues.some((x) => x.level === 'warn');
-                const radius = parse.rows.length === 1 ? '16px' : i === 0 ? '16px 16px 6px 6px' : i === parse.rows.length - 1 ? '6px 6px 16px 16px' : '6px';
+            <div aria-label="Fixture preview" style={{ display: 'grid', gap: 14 }}>
+              {groups.map((g) => (
+                <div key={g.name} style={{ display: 'grid', gap: 6 }}>
+                  {(groups.length > 1 || g.rows[0]!.round) && <div className="lbl" style={{ color: 'var(--text-secondary)' }}>{stageTitle(g.name).toUpperCase()} · {g.rows.length} MATCH{g.rows.length === 1 ? '' : 'ES'}</div>}
+                  <div className="tm-list">
+                    {g.rows.map((r, i) => {
+                      const bad = r.issues.some((x) => x.level === 'error');
+                      const warn = !bad && r.issues.some((x) => x.level === 'warn');
+                      const radius = g.rows.length === 1 ? '16px' : i === 0 ? '16px 16px 6px 6px' : i === g.rows.length - 1 ? '6px 6px 16px 16px' : '6px';
                 return (
                   <div key={r.index} className="tm-row" style={{ gridTemplateColumns: '28px minmax(0,1fr)', borderRadius: radius, background: 'var(--surface-sunken)', opacity: r.skip ? 0.6 : 1 }}>
                     <span aria-label={bad ? 'Error' : warn ? 'Warning' : 'Ready'} style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, background: bad ? 'color-mix(in srgb, #ff383c 22%, transparent)' : warn ? 'var(--amber-soft)' : 'color-mix(in srgb, #34c759 25%, transparent)', color: bad ? 'var(--red-text)' : warn ? 'var(--amber)' : '#6fe08d' }}>{bad ? '!' : warn ? '•' : '✓'}</span>
@@ -139,7 +148,10 @@ export function FixturesImport({ tournamentId, prompt, teamCount, fixtureCount, 
                     </span>
                   </div>
                 );
-              })}
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}

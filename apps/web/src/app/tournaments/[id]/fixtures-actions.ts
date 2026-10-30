@@ -47,9 +47,9 @@ export async function createFixtures(raw: unknown): Promise<{ error?: string; cr
 
   // replace: the new list stands in for whatever was there (nothing has been played)
   const replaced = await clearFixtures(p.data.tournamentId);
-  const added: BracketFixture[] = rows.map((r) => ({ no: r.no, round: r.round, date: r.date, time: r.time, tz: p.data.tzOffset, venue: r.venue, a: r.a!, b: r.b!, matchId: null }));
-  const { bracket: _old, byes: _oldByes, ...base } = loaded.meta;
-  const meta: TournamentMeta = { ...base, fixturesGenerated: true, bracket: added, ...(parse.byes.length ? { byes: parse.byes } : {}) };
+  const added: BracketFixture[] = rows.map((r) => ({ no: r.no, round: r.round, date: r.date, time: r.time, tz: p.data.tzOffset, venue: r.venue, a: r.a!, b: r.b!, matchId: null, ...(r.group ? { group: r.group } : {}) }));
+  const { bracket: _old, byes: _oldByes, groups: _oldGroups, ...base } = loaded.meta;
+  const meta: TournamentMeta = { ...base, fixturesGenerated: true, bracket: added, ...(parse.byes.length ? { byes: parse.byes } : {}), ...(parse.groups.length ? { groups: parse.groups.map((g) => ({ name: g.name, teamIds: g.teams.map((t) => t.id), ...(g.from ? { from: g.from } : {}) })) } : {}) };
   await getDb().update(tournaments).set({ meta: meta as unknown as Record<string, unknown> }).where(eq(tournaments.id, p.data.tournamentId));
   const made = await advanceBracket(p.data.tournamentId);
 

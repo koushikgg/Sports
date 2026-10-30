@@ -317,3 +317,143 @@ describe('stages', () => {
     expect(buildFixturePrompt(ctx)).not.toContain('Quarter-final');
   });
 });
+
+describe('groups (version 3)', () => {
+  const g = {
+    ...ctx, formatKey: 'custom' as const,
+    teams: ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'].map((n) => ({ id: n, name: `T${n}` })),
+  };
+  const groups = [{ name: 'Group A', teams: ['TA1', 'TA2', 'TA3'] }, { name: 'Group B', teams: ['TB1', 'TB2', 'TB3'] }];
+  const m = (no: number, group: string | undefined, a: string, b: string, time: string, date = '2026-11-02') => ({ match: no, ...(group ? { group } : {}), date, time, teamA: a, teamB: b });
+  const groupStage = [
+    m(1, 'Group A', 'TA1', 'TA2', '18:00'), m(2, 'Group B', 'TB1', 'TB2', '18:00'),
+    m(3, 'Group A', 'TA1', 'TA3', '19:00'), m(4, 'Group B', 'TB1', 'TB3', '19:00'),
+    m(5, 'Group A', 'TA2', 'TA3', '20:00'), m(6, 'Group B', 'TB2', 'TB3', '20:00'),
+  ];
+  const ko = [
+    { match: 7, round: 'Semi-final', date: '2026-11-03', time: '18:00', teamA: 'Group A Rank 1', teamB: 'Group B Rank 2' },
+    { match: 8, round: 'Semi-final', date: '2026-11-03', time: '19:00', teamA: 'Group B Rank 1', teamB: 'Group A Rank 2' },
+    { match: 9, round: 'Final', date: '2026-11-04', time: '18:00', teamA: 'Winner of Match 7', teamB: 'Winner of Match 8' },
+  ];
+  const run = (fixtures: unknown[], gr: unknown = groups) => parseFixtureJson(JSON.stringify({ version: 3, groups: gr, fixtures }), g);
+  const allErrs = (r: ReturnType<typeof parseFixtureJson>) => r.rows.flatMap((x) => x.issues.filter((i) => i.level === 'error').map((i) => i.text));
+
+  it('reads groups, group matches under their group and knockout places', () => {
+    const r = run([...groupStage, ...ko]);
+    expect(r.fatal).toBeNull();
+    expect(allErrs(r)).toEqual([]);
+    expect(r.groups.map((x) => [x.name, x.teams.length])).toEqual([['Group A', 3], ['Group B', 3]]);
+    expect(r.rows[0]!.group).toBe('Group A');
+    expect(r.rows[0]!.round).toBe('Group A');
+    expect(r.rows[6]!.a).toEqual({ kind: 'rank', pos: 1, group: 'Group A' });
+    expect(r.rows[6]!.labelA).toBe('Group A Rank 1');
+    expect(r.stages.map((s) => s.name)).toEqual(['Group A', 'Group B', 'Semi-final', 'Final']);
+  });
+  it('infers the group when both teams are in the same one', () => {
+    const r = run([{ ...groupStage[0], group: undefined }, ...groupStage.slice(1), ...ko]);
+    expect(r.rows[0]!.group).toBe('Group A');
+  });
+  it('refuses a team in two groups, a team in none, and an unknown team', () => {
+    expect(run(groupStage, [{ name: 'Group A', teams: ['TA1', 'TA2', 'TA3'] }, { name: 'Group B', teams: ['TB1', 'TB2', 'TB3', 'TA1'] }]).fatal).toMatch(/only one group/);
+    expect(run(groupStage, [{ name: 'Group A', teams: ['TA1', 'TA2', 'TA3'] }, { name: 'Group B', teams: ['TB1', 'TB2'] }]).fatal).toMatch(/TB3 is not in any group/);
+    expect(run(groupStage, [{ name: 'Group A', teams: ['TA1', 'Nobody'] }]).fatal).toMatch(/not a team/);
+  });
+  it('flags mixed groups, repeated pairs and incomplete round robins', () => {
+    expect(allErrs(run([m(1, 'Group A', 'TA1', 'TB1', '18:00'), ...groupStage.slice(1)]))).toContain('Both sides must be in Group A; do not mix groups in the group stage.');
+    const dup = run([...groupStage, m(10, 'Group A', 'TA2', 'TA1', '21:00', '2026-11-02')]);
+    expect(allErrs(dup).some((e) => /already play each other in Group A/.test(e))).toBe(true);
+    const short = run(groupStage.slice(1));
+    expect(allErrs(short).some((e) => /Group A must be a full round robin/.test(e))).toBe(true);
+  });
+  it('never lets a group match winner decide a knockout place', () => {
+    const r = run([...groupStage, { match: 7, round: 'Semi-final', date: '2026-11-03', time: '18:00', teamA: 'Winner of Match 1', teamB: 'Group B Rank 2' }]);
+    expect(allErrs(r).some((e) => /never from a group match winner/.test(e))).toBe(true);
+  });
+  it('checks places: real group, within its size, used once, after the group ends', () => {
+    expect(allErrs(run([...groupStage, { ...ko[0], teamA: 'Group C Rank 1' }])).some((e) => /not one of the groups/.test(e))).toBe(true);
+    expect(allErrs(run([...groupStage, { ...ko[0], teamA: 'Group A Rank 4' }])).some((e) => /only 3 teams/.test(e))).toBe(true);
+    expect(allErrs(run([...groupStage, ko[0], { ...ko[1], teamA: 'Group A Rank 1' }])).some((e) => /only be used by one/.test(e))).toBe(true);
+    expect(allErrs(run([...groupStage, { ...ko[0], date: '2026-11-02', time: '19:30' }])).some((e) => /only known after Group A finishes/.test(e))).toBe(true);
+  });
+  it('refuses a group place when the file has no groups', () => {
+    const r = parseFixtureJson(JSON.stringify({ version: 3, fixtures: [ko[0]] }), g);
+    expect(allErrs(r).some((e) => /needs a "groups" list/.test(e))).toBe(true);
+  });
+  it('custom prompts explain groups; others do not', () => {
+    expect(buildFixturePrompt({ ...g, expectedMatches: 0 })).toContain('Group A Rank 1');
+    expect(buildFixturePrompt({ ...ctx, expectedMatches: 3 })).not.toContain('GROUPS (use only');
+  });
+});
+
+describe('strict prompt types', () => {
+  it('spells out the exact types, and only custom prompts mention groups', () => {
+    const custom = buildFixturePrompt({ ...ctx, formatKey: 'custom', expectedMatches: 0 });
+    expect(custom).toContain('type Reply = {');
+    expect(custom).toContain('version: 4;');
+    expect(custom).toContain('match: number;');
+    expect(custom).toContain('groups?: Group[];');
+    expect(custom).toContain('{ name: string; from: string[] }');
+    expect(custom).toContain('group?: string;');
+    expect(custom).toContain('no trailing commas');
+    const plain = buildFixturePrompt(ctx);
+    expect(plain).toContain('type Fixture = {');
+    expect(plain).not.toContain('groups?:');
+  });
+});
+
+describe('a second stage built from places (version 4)', () => {
+  const g = { ...ctx, formatKey: 'custom' as const, teams: ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'].map((n) => ({ id: n, name: `T${n}` })) };
+  const base = [{ name: 'Group A', teams: ['TA1', 'TA2', 'TA3'] }, { name: 'Group B', teams: ['TB1', 'TB2', 'TB3'] }];
+  const sup = { name: 'Super Four', from: ['Group A Rank 1', 'Group A Rank 2', 'Group B Rank 1', 'Group B Rank 2'] };
+  const f = (match: number, group: string, a: string, b: string, date: string, time: string) => ({ match, group, date, time, teamA: a, teamB: b });
+  const stage1 = [
+    f(1, 'Group A', 'TA1', 'TA2', '2026-11-01', '18:00'), f(2, 'Group B', 'TB1', 'TB2', '2026-11-01', '19:00'),
+    f(3, 'Group A', 'TA1', 'TA3', '2026-11-02', '18:00'), f(4, 'Group B', 'TB1', 'TB3', '2026-11-02', '19:00'),
+    f(5, 'Group A', 'TA2', 'TA3', '2026-11-03', '18:00'), f(6, 'Group B', 'TB2', 'TB3', '2026-11-03', '19:00'),
+  ];
+  const A1 = 'Group A Rank 1', A2 = 'Group A Rank 2', B1 = 'Group B Rank 1', B2 = 'Group B Rank 2';
+  const pairs: [string, string][] = [[A1, A2], [A1, B1], [A1, B2], [A2, B1], [A2, B2], [B1, B2]];
+  const stage2 = pairs.map(([a, b], i) => f(7 + i, 'Super Four', a, b, `2026-11-0${4 + Math.floor(i / 2)}`, i % 2 ? '19:00' : '18:00'));
+  const finals = [
+    { match: 13, round: 'Semi-final', date: '2026-11-07', time: '18:00', teamA: 'Super Four Rank 1', teamB: 'Super Four Rank 4' },
+    { match: 14, round: 'Semi-final', date: '2026-11-07', time: '19:00', teamA: 'Super Four Rank 2', teamB: 'Super Four Rank 3' },
+    { match: 15, round: 'Final', date: '2026-11-08', time: '18:00', teamA: 'Winner of Match 13', teamB: 'Winner of Match 14' },
+  ];
+  const run = (fixtures: unknown[], groups: unknown[] = [...base, sup]) => parseFixtureJson(JSON.stringify({ version: 4, groups, fixtures }), g);
+  const errs2 = (r: ReturnType<typeof parseFixtureJson>) => r.rows.flatMap((x) => x.issues.filter((i) => i.level === 'error').map((i) => i.text));
+
+  it('reads a group made of places, its round robin and the knockouts after it', () => {
+    const r = run([...stage1, ...stage2, ...finals]);
+    expect(r.fatal).toBeNull();
+    expect(errs2(r)).toEqual([]);
+    expect(r.groups.map((x) => [x.name, x.from?.length ?? x.teams.length])).toEqual([['Group A', 3], ['Group B', 3], ['Super Four', 4]]);
+    expect(r.rows[6]!.group).toBe('Super Four');
+    expect(r.rows[6]!.round).toBe('Super Four');
+    expect(r.rows[6]!.a).toEqual({ kind: 'rank', pos: 1, group: 'Group A' });
+    expect(r.rows[12]!.a).toEqual({ kind: 'rank', pos: 1, group: 'Super Four' });
+    expect(r.stages.map((s) => s.name)).toEqual(['Group A', 'Group B', 'Super Four', 'Semi-final', 'Final']);
+  });
+  it('infers the second-stage group from its places', () => {
+    const r = run([...stage1, ...stage2.map((x) => ({ ...x, group: undefined })), ...finals]);
+    expect(r.rows[6]!.group).toBe('Super Four');
+  });
+  it('refuses bad "from" lists', () => {
+    expect(run(stage1, [...base, { name: 'S', from: ['Group C Rank 1', 'Group A Rank 1'] }]).fatal).toMatch(/earlier group/);
+    expect(run(stage1, [...base, { name: 'S', from: ['Group A Rank 4', 'Group A Rank 1'] }]).fatal).toMatch(/only 3 places/);
+    expect(run(stage1, [{ name: 'S', from: [A1, B1] }, ...base]).fatal).toMatch(/earlier group/);
+    expect(run(stage1, [...base, { name: 'S', from: [A1, A1] }]).fatal).toMatch(/listed twice/);
+    expect(run(stage1, [...base, { name: 'S', teams: ['TA1'], from: [A1, B1] }]).fatal).toMatch(/both "teams" and "from"/);
+  });
+  it('needs the second stage to be a full round robin of its places', () => {
+    expect(errs2(run([...stage1, ...stage2.slice(1), ...finals])).some((e) => /Super Four must be a full round robin/.test(e))).toBe(true);
+  });
+  it('a place goes to one thing only, and must be played after its group ends', () => {
+    expect(errs2(run([...stage1, ...stage2, ...finals, { match: 16, round: 'Final', date: '2026-11-09', time: '18:00', teamA: A1, teamB: 'Super Four Rank 1' }])).some((e) => /only be used once/.test(e))).toBe(true);
+    const early = stage2.map((x, i) => (i === 0 ? { ...x, date: '2026-11-03', time: '17:30' } : x));
+    expect(errs2(run([...stage1, ...early, ...finals])).some((e) => /only known after Group A finishes/.test(e))).toBe(true);
+  });
+  it('a second-stage match must use that group’s places', () => {
+    const r = run([...stage1, { ...stage2[0], teamA: 'TA1' }, ...stage2.slice(1), ...finals]);
+    expect(errs2(r).some((e) => /made of places from earlier groups/.test(e))).toBe(true);
+  });
+});

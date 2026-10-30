@@ -43,6 +43,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
   // oldest first. A Table tournament shows its league rounds, then Semi-finals and the Final, each under its own heading.
   // Imported fixtures still waiting on a result sit alongside real matches.
   type Item = { at: string; m?: (typeof t.matches)[number]; p?: (typeof t.pending)[number] };
+  const noOf = (it: Item) => it.p?.no ?? it.m?.fixtureNo ?? Number.MAX_SAFE_INTEGER;
   const venueNames = (t.meta?.venues ?? []).map((v) => v.name);
   const stageLike = (r: string | null | undefined): r is string => !!r?.trim();
   const dayText = (at: string) => (at === '9999' ? 'DATE TO BE CONFIRMED' : new Date(at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase());
@@ -51,7 +52,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
     const items: Item[] = [
       ...t.matches.map((m) => ({ at: m.scheduledAt ?? '9999', m })),
       ...t.pending.map((p) => ({ at: new Date(`${p.date}T${p.time}:00`).toISOString(), p })),
-    ].sort((a, b) => a.at.localeCompare(b.at));
+    ].sort((a, b) => a.at.localeCompare(b.at) || noOf(a) - noOf(b));
     const map = new Map<string, Item[]>();
     for (const it of items) {
       const rd = roundOf(it);
@@ -81,7 +82,14 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
       </div>
 
       <div className="tn-pane">
-        {active === 'standings' && (
+        {active === 'standings' && t.groupStandings.length > 0 && (
+          <div className="tn-groups">
+            {t.groupStandings.map((g) => (
+              <StandingsTable key={g.name} rows={g.rows} qualify={g.qualify} showQualify={g.qualify > 0} cricket={cricket} title={`${g.name.toUpperCase()} POINTS TABLE`} legend={`Top ${g.qualify} of ${g.name} go through to the knockouts`} />
+            ))}
+          </div>
+        )}
+        {active === 'standings' && t.groupStandings.length === 0 && (
           <StandingsTable rows={t.standings} qualify={t.qualify} showQualify={t.formatKey === 'lk' || t.formatKey === 'groups'} cricket={cricket} />
         )}
 

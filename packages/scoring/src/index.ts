@@ -26,7 +26,7 @@ import { formatOvers, type CricketState } from '@sports/sports-engine/src/cricke
 import { matchTeamStats } from '@sports/sports-engine/src/cricket-view';
 import { fitMatchesPerTeam } from '@sports/shared';
 import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
-import { isMatchRef, slotLabel } from '@sports/sports-engine/src/fixture-import';
+import { isMatchRef, slotKey, slotLabel } from '@sports/sports-engine/src/fixture-import';
 import { computeCricketBoards, type Board, type BoardRow, type LeaderMatch } from '@sports/sports-engine/src/leaders';
 import { computeStandings, type FinishedMatch, type Standing } from '@sports/sports-engine/src/standings';
 import { projectKnockout, projectLeagueKnockout, toInstant, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
@@ -300,6 +300,8 @@ export interface MatchCardData {
   visibility: 'public' | 'link' | 'private';
   /** Round label from an imported fixture, e.g. "Match 3" or "Group A · Match 1". */
   round: string | null;
+  /** The fixture number it was made from (imported fixtures), to order matches that start together. */
+  fixtureNo: number | null;
   summary: ScoreSummary;
 }
 
@@ -422,6 +424,7 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
       assignedScorerId: r.match.assignedScorerId,
       visibility: r.match.visibility as MatchCardData['visibility'],
       round: ((r.match.meta as { round?: unknown } | null)?.round as string | undefined) ?? null,
+      fixtureNo: Number.isInteger((r.match.meta as { fixtureNo?: unknown } | null)?.fixtureNo) ? ((r.match.meta as { fixtureNo: number }).fixtureNo) : null,
       summary: engine.summary(state, ctx),
     };
   });
@@ -561,7 +564,7 @@ const SCORED_SPORTS = new Set(['cricket']);
 const slotText = (s: FixtureSlot) => slotLabel(s);
 
 /** Fixture numbers of the knockout stage (any side that is not a plain team). Their results do not count in the league table. */
-const knockoutNos = (meta: TournamentMeta | null | undefined) => new Set((meta?.bracket ?? []).filter((f) => f.a.kind !== 'team' || f.b.kind !== 'team').map((f) => f.no));
+const knockoutNos = (meta: TournamentMeta | null | undefined) => new Set((meta?.bracket ?? []).filter((f) => !f.group && (f.a.kind !== 'team' || f.b.kind !== 'team')).map((f) => f.no));
 
 /** Completed matches as the standings maths wants them. */
 function toFinished(rows: { match: { teamAId: string; teamBId: string; result: unknown }; state: unknown }[]): FinishedMatch[] {
@@ -611,7 +614,10 @@ export async function advanceBracket(tournamentId: string): Promise<number> {
   const leagueFixtures = bracket.filter((f) => f.a.kind === 'team' && f.b.kind === 'team');
   const leagueDone = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.matchId && results.find((x) => x.id === f.matchId)?.status === 'completed');
   let table: string[] | null = null;
-  if (leagueDone && open.some((f) => f.a.kind === 'rank' || f.b.kind === 'rank')) {
+  const groupTables = new Map<string, string[]>();
+  const groupMembers = new Map<string, string[]>();
+  const wantsRank = open.some((f) => f.a.kind === 'rank' || f.b.kind === 'rank');
+  if (wantsRank && (leagueDone || meta.groups?.length)) {
     const ko = knockoutNos(meta);
     const rows = await db
       .select({ match: matches, state: matchStates.state })
@@ -619,9 +625,26 @@ export async function advanceBracket(tournamentId: string): Promise<number> {
       .leftJoin(matchStates, eq(matchStates.matchId, matches.id))
       .where(and(eq(matches.tournamentId, tournamentId), eq(matches.status, 'completed')));
     const league = rows.filter(({ match }) => !ko.has(Number((match.meta as { fixtureNo?: unknown } | null)?.fixtureNo)));
-    table = computeStandings(meta.teams.map((t) => t.id), toFinished(league), meta.points ?? DEFAULT_POINTS, meta.tiebreak ?? 'NRR').map((x) => x.teamId);
+    if (meta.groups?.length) {
+      // Each group has its own table, known once every match of that group is done. A later-stage group is made of places
+      // in earlier groups, so groups are taken in order and its members are known once those places are.
+      const place = (x: FixtureSlot): string | null => (x.kind === 'team' ? x.id : x.kind === 'rank' ? (groupTables.get(x.group ?? '')?.[x.pos - 1] ?? null) : null);
+      for (const g of meta.groups) {
+        let ids: string[] | null = g.teamIds;
+        if (g.from) { const r = g.from.map(place); ids = r.every((x): x is string => !!x) ? r : null; }
+        if (!ids || ids.length === 0) continue;
+        groupMembers.set(g.name, ids);
+        const mine = bracket.filter((f) => f.group === g.name);
+        if (mine.length === 0 || !mine.every((f) => f.matchId && results.find((x) => x.id === f.matchId)?.status === 'completed')) continue;
+        const inGroup = league.filter(({ match }) => (match.meta as { group?: unknown } | null)?.group === g.name);
+        groupTables.set(g.name, computeStandings(ids, toFinished(inGroup), meta.points ?? DEFAULT_POINTS, meta.tiebreak ?? 'NRR').map((x) => x.teamId));
+      }
+    } else {
+      table = computeStandings(meta.teams.map((t) => t.id), toFinished(league), meta.points ?? DEFAULT_POINTS, meta.tiebreak ?? 'NRR').map((x) => x.teamId);
+    }
   }
-  const teamOf = (s: FixtureSlot): string | null => (s.kind === 'team' ? s.id : s.kind === 'rank' ? (table?.[s.pos - 1] ?? null) : (outcome.get(s.match)?.[s.kind] ?? null));
+  const teamOf = (s: FixtureSlot): string | null =>
+    s.kind === 'team' ? s.id : s.kind === 'rank' ? ((s.group ? groupTables.get(s.group) : table)?.[s.pos - 1] ?? null) : (outcome.get(s.match)?.[s.kind] ?? null);
 
   const overs = meta.overs ?? 20;
   let created = 0;
@@ -635,7 +658,7 @@ export async function advanceBracket(tournamentId: string): Promise<number> {
       .values({
         sportId: row.sportId, tournamentId, teamAId: a, teamBId: b, venue: f.venue, scheduledAt: toInstant(f.date, f.time, f.tz),
         config: { overs, ballsPerOver: 6, powerplayOvers: Math.min(6, overs), playersPerSide: 11, maxOversPerBowler: Math.ceil(overs / 5), freeHit: true, wideReball: true, superOver: true, dls: false },
-        visibility: 'public', meta: { ...(f.round ? { round: f.round } : {}), fixtureNo: f.no, source: meta.formatKey === 'lk' ? 'table' : 'fixture-import' },
+        visibility: 'public', meta: { ...(f.round ? { round: f.round } : {}), ...(f.group ? { group: f.group } : {}), fixtureNo: f.no, source: meta.formatKey === 'lk' ? 'table' : 'fixture-import' },
       })
       .onConflictDoNothing()
       .returning({ id: matches.id });
@@ -644,12 +667,15 @@ export async function advanceBracket(tournamentId: string): Promise<number> {
     const [have] = await db.select({ id: matches.id }).from(matches).where(and(eq(matches.tournamentId, tournamentId), sql`${matches.meta}->>'fixtureNo' = ${String(f.no)}`)).limit(1);
     if (have) f.matchId = have.id;
   }
-  if (next.some((f, i) => f.matchId !== bracket[i]!.matchId)) {
+  const settled = (meta.groups ?? []).filter((g) => g.from && g.teamIds.length === 0 && groupMembers.has(g.name));
+  if (settled.length || next.some((f, i) => f.matchId !== bracket[i]!.matchId)) {
     // merge by fixture number into the freshest copy, so two writers never undo each other
     const [fresh] = await db.select({ meta: tournaments.meta }).from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1);
     const cur = fresh!.meta as unknown as TournamentMeta;
     const merged = (cur.bracket ?? []).map((f) => ({ ...f, matchId: f.matchId ?? next.find((n) => n.no === f.no)?.matchId ?? null }));
-    await db.update(tournaments).set({ meta: { ...cur, bracket: merged } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));
+    // a later-stage group remembers who its members are once they are known
+    const groups = (cur.groups ?? []).map((g) => (g.from && g.teamIds.length === 0 && groupMembers.has(g.name) ? { ...g, teamIds: groupMembers.get(g.name)! } : g));
+    await db.update(tournaments).set({ meta: { ...cur, bracket: merged, ...(groups.length ? { groups } : {}) } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));
   }
   return created;
 }
@@ -702,8 +728,8 @@ export async function clearFixtures(tournamentId: string): Promise<number> {
   const [row] = await db.select({ meta: tournaments.meta }).from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1);
   const meta = row?.meta as unknown as TournamentMeta | undefined;
   const waiting = (meta?.bracket ?? []).filter((f) => !f.matchId).length;
-  if (meta && (meta.bracket || meta.byes || meta.fixturesGenerated)) {
-    const { bracket: _b, byes: _y, ...rest } = meta;
+  if (meta && (meta.bracket || meta.byes || meta.groups || meta.fixturesGenerated)) {
+    const { bracket: _b, byes: _y, groups: _g, ...rest } = meta;
     await db.update(tournaments).set({ meta: { ...rest, fixturesGenerated: false } as unknown as Record<string, unknown> }).where(eq(tournaments.id, tournamentId));
   }
   return deleted.length + waiting;
@@ -722,6 +748,8 @@ export interface TournamentDetail extends TournamentSummary {
   byes: string[];
   meta: TournamentMeta | null;
   standings: StandingRow[];
+  /** Group tournaments: one points table per group, and how many of each go through to the knockouts. */
+  groupStandings: { name: string; qualify: number; rows: StandingRow[] }[];
   /** The tournament's matches (fixtures made through the match wizard), with scores. */
   matches: MatchCardData[];
   /** Cricket leaderboards; null for other sports. */
@@ -868,6 +896,22 @@ export async function getTournamentDetail(id: string, who: ViewerArg = false): P
     short: names.get(s.teamId)?.shortName ?? null,
   }));
 
+  const groupStandings = (meta?.groups ?? []).map((g) => {
+    const wanted = (meta?.bracket ?? []).flatMap((f) => [f.a, f.b]).filter((x) => x.kind === 'rank' && x.group === g.name).map((x) => (x as { pos: number }).pos);
+    const base = { name: g.name, qualify: Math.min(wanted.length ? Math.max(...wanted) : 2, g.from ? g.from.length : g.teamIds.length) };
+    // a later-stage group whose members are not known yet lists the places it is waiting for
+    if (g.from && g.teamIds.length === 0) {
+      return { ...base, rows: g.from.map((x): StandingRow => ({ teamId: slotKey(x), played: 0, won: 0, lost: 0, tied: 0, noResult: 0, points: 0, diff: 0, form: [], name: slotLabel(x), short: null })) };
+    }
+    const mine = finishedRows.filter(({ match }) => (match.meta as { group?: unknown } | null)?.group === g.name);
+    const rows = computeStandings(g.teamIds, toFinished(mine), points, tiebreak).map((s) => ({
+      ...s,
+      name: names.get(s.teamId)?.name ?? meta?.teams.find((t) => t.id === s.teamId)?.name ?? '?',
+      short: names.get(s.teamId)?.shortName ?? null,
+    }));
+    return { ...base, rows };
+  });
+
   const counts = Object.entries(cards.reduce<Record<string, number>>((m, c) => ((m[c.status] = (m[c.status] ?? 0) + 1), m), {})).map(([status, n]) => ({ status, n }));
   const summary = summarise(row, counts);
 
@@ -893,9 +937,10 @@ export async function getTournamentDetail(id: string, who: ViewerArg = false): P
     started: await tournamentStarted(id),
     byes: (meta?.byes ?? []).map((b) => b.name),
     standings,
+    groupStandings,
     matches: cards,
     boards: row.sportKey === 'cricket' ? await getTournamentLeaderboards(id) : null,
-    bracket: rounds.length ? { rounds, seeds, projected: summary.played === 0 || summary.formatKey !== 'ko' } : null,
+    bracket: rounds.length && !groupStandings.length ? { rounds, seeds, projected: summary.played === 0 || summary.formatKey !== 'ko' } : null,
     qualify,
     tiebreak,
     hasFixtures: cards.length > 0,

@@ -196,8 +196,8 @@ export type TournamentEdit = z.infer<typeof tournamentEditSchema>;
 export type FixtureSlot =
   | { kind: 'team'; id: string; name: string }
   | { kind: 'winner' | 'loser'; match: number }
-  /** Whoever is in this place of the league table when the league matches are done (1 = top). */
-  | { kind: 'rank'; pos: number };
+  /** Whoever is in this place of the league table when the league matches are done (1 = top). With `group`, of that group's table. */
+  | { kind: 'rank'; pos: number; group?: string };
 
 /** A fixture from the JSON import. It becomes a real match (`matchId`) once both teams are known and the sport can be scored. */
 export interface BracketFixture {
@@ -211,6 +211,8 @@ export interface BracketFixture {
   a: FixtureSlot;
   b: FixtureSlot;
   matchId: string | null;
+  /** Group-stage fixtures: the group both teams belong to. */
+  group?: string | null;
 }
 
 export interface TournamentMeta {
@@ -234,6 +236,8 @@ export interface TournamentMeta {
   bracket?: BracketFixture[];
   /** Teams that skip the first round of the imported bracket. */
   byes?: { id: string; name: string }[];
+  /** Imported groups. Each team is in one first-stage group; a later-stage group is made of places (`from`) in earlier groups and gets its `teamIds` once they are known. Every group has its own points table. */
+  groups?: { name: string; teamIds: string[]; from?: FixtureSlot[] }[];
 }
 
 export const VISIBILITIES = ['public', 'link', 'private'] as const;

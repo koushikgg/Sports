@@ -3,11 +3,15 @@
  * tool, then pastes the JSON it returns. Nothing here touches the database; the server loads the context and saves.
  *
  * Format version 2 adds what knockouts need: a match number, slots that point at an earlier match
- * ("Winner of Match 3"), and a list of teams that skip the first round (byes). Version 1 files still read.
+ * ("Winner of Match 3"), and a list of teams that skip the first round (byes). Version 3 adds groups: a "groups" list,
+ * a "group" on each group-stage fixture, and knockout sides read from a group's final table ("Group A Rank 1").
+ * Version 4 lets a group be made of places from earlier groups ("from": ["Group A Rank 1", ...]) so a second stage
+ * (Super Six, a new league of the top two) can play its own round robin before the knockouts.
+ * Versions 1 to 3 still read.
  */
 import type { FixtureSlot } from '@sports/shared';
 
-export const FIXTURE_JSON_VERSION = 2;
+export const FIXTURE_JSON_VERSION = 4;
 export const MAX_FIXTURES = 300;
 
 /** One side of a fixture: a team, or the winner/loser of an earlier match. */
@@ -34,6 +38,9 @@ export interface FixtureContext {
   bracket: { no: number; date: string; time: string; a: Slot; b: Slot }[];
 }
 
+/** A group of teams that play each other once. A later stage's group has no fixed teams: its members are places ("from") in earlier groups. */
+export interface ParsedGroup { name: string; teams: { id: string; name: string }[]; from?: Slot[] }
+
 export interface FixtureIssue { level: 'error' | 'warn'; text: string }
 export interface FixtureRow {
   index: number;
@@ -43,6 +50,8 @@ export interface FixtureRow {
   date: string;
   time: string;
   venue: string | null;
+  /** The group a group-stage match belongs to (its round is the group's name). */
+  group: string | null;
   a: Slot | null;
   b: Slot | null;
   /** How each side reads: a team name, or "Winner of Match 3". */
@@ -58,6 +67,8 @@ export interface FixtureParse {
   rows: FixtureRow[];
   /** Teams that skip the first round. */
   byes: { id: string; name: string }[];
+  /** The groups of a group tournament, with their teams. */
+  groups: ParsedGroup[];
   /** The rounds in the order they are played, with how many matches each has. */
   stages: { name: string; count: number }[];
   /** Problems with the list as a whole, e.g. a team that is in no fixture. They warn; they do not block. */
@@ -69,11 +80,11 @@ const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({
 /** A slot that points at another match ("Winner of Match 3"), as opposed to a team or a table position. */
 export const isMatchRef = (s: Slot | null): s is Extract<Slot, { kind: 'winner' | 'loser' }> => s?.kind === 'winner' || s?.kind === 'loser';
 export const slotLabel = (s: Slot | null, raw = ''): string =>
-  !s ? raw : s.kind === 'team' ? s.name : s.kind === 'rank' ? `${ordinal(s.pos)} in the table` : `${s.kind === 'winner' ? 'Winner' : 'Loser'} of Match ${s.match}`;
-export const slotKey = (s: Slot | null) => (!s ? '' : s.kind === 'team' ? s.id : s.kind === 'rank' ? `R${s.pos}` : `${s.kind[0]!.toUpperCase()}${s.match}`);
+  !s ? raw : s.kind === 'team' ? s.name : s.kind === 'rank' ? (s.group ? `${s.group} Rank ${s.pos}` : `${ordinal(s.pos)} in the table`) : `${s.kind === 'winner' ? 'Winner' : 'Loser'} of Match ${s.match}`;
+export const slotKey = (s: Slot | null) => (!s ? '' : s.kind === 'team' ? s.id : s.kind === 'rank' ? `R${s.group ? `${s.group}:` : ''}${s.pos}` : `${s.kind[0]!.toUpperCase()}${s.match}`);
 
 const FORMAT_RULES: Record<FixtureContext['formatKey'], string> = {
-  custom: 'You decide the shape: league matches, knockout rounds, byes, or a mix. Make a sensible schedule for the teams listed, using every team. For a knockout part list every round up to the final, with "Winner of Match N" for sides decided by an earlier match, and list teams that skip the first round under "byes".',
+  custom: 'You decide the shape: league matches, knockout rounds, byes, or a mix. Make a sensible schedule for the teams listed, using every team. For a knockout part list every round up to the final, with "Winner of Match N" for sides decided by an earlier match, and list teams that skip the first round under "byes". Groups are allowed: see GROUPS below.',
   league: 'Everyone plays everyone exactly once.',
   lk: 'League stage only: everyone plays everyone exactly once. The knockout rounds are added later, so leave them out.',
   groups: 'Split the teams evenly into Group A and Group B. Within each group everyone plays everyone once. Put the group in the round name, for example "Group A · Match 1". Leave the knockout rounds out.',
@@ -91,6 +102,23 @@ const KO_EXAMPLE = `{
     { "match": 5, "round": "Final", "date": "2026-11-04", "time": "18:00", "teamA": "Winner of Match 3", "teamB": "Winner of Match 4" }
   ]
 }`;
+
+
+const GROUPS_NOTE = `
+
+GROUPS (use only if you split the teams into groups; otherwise leave "groups" out)
+- Add a top-level "groups" list. Every team is in exactly one first-stage group. Split evenly if no sizes are given.
+  "groups": [ { "name": "Group A", "teams": ["Team 1", "Team 2"] }, { "name": "Group B", "teams": ["Team 3", "Team 4"] } ]
+- Every group-stage fixture has "group": "Group A" and two teams from that group. Never mix groups in the group stage.
+- Inside a group everyone plays everyone exactly once. List each group's matches under its own "group"; do not number them as rounds.
+- A second stage is allowed (for example the top two of each group play another round robin). Define it as a group made of
+  places, listed after the groups it uses, and give its matches "group" with the places as the teams:
+  { "name": "Super Four", "from": ["Group A Rank 1", "Group A Rank 2", "Group B Rank 1", "Group B Rank 2"] }
+  { "match": 7, "group": "Super Four", "date": "...", "time": "...", "teamA": "Group A Rank 1", "teamB": "Group B Rank 2" }
+  A second-stage group is also a full round robin, and every place in "from" is used by that group only.
+- Later rounds (quarter-final, semi-final, final) take places from the last group stage: "Group A Rank 1", "Super Four Rank 2".
+  Never use "Winner of Match N" for a group match. Only knockout rounds use "Winner of Match N" / "Loser of Match N".
+- Play every match after the last match of every group whose places it uses.`;
 
 /** The text the organiser copies. Plain text, so it works in any chat tool. */
 export function buildFixturePrompt(c: FixtureContext): string {
@@ -117,6 +145,24 @@ JSON FORMAT (version ${FIXTURE_JSON_VERSION})
   ]
 }
 
+STRICT TYPES (the reply must match this exactly)
+type Reply = {
+  version: 4;                 // the number 4, not a string
+${c.formatKey === 'custom' ? '  groups?: Group[];           // only when the teams are split into groups\n' : ''}  byes?: string[];            // omit the key when there are none
+  fixtures: Fixture[];        // 1 to ${MAX_FIXTURES} items
+};
+${c.formatKey === 'custom' ? 'type Group = { name: string; teams: string[] } | { name: string; from: string[] };   // from: places like "Group A Rank 1" in earlier groups\n' : ''}type Fixture = {
+  match: number;              // whole number >= 1, each used once
+  round?: string;
+${c.formatKey === 'custom' ? '  group?: string;             // group-stage matches only; must equal a group name\n' : ''}  date: string;               // "YYYY-MM-DD"
+  time: string;               // "HH:MM", 24-hour
+  venue?: string;
+  teamA: string;
+  teamB: string;
+};
+- Valid JSON only: double quotes, no comments, no trailing commas, no "null", no extra keys. Leave an optional key out instead of leaving it empty.
+- "match", "version" are numbers; every other value is a string or a list of strings as typed above.
+
 RULES
 - "match" numbers the fixtures 1, 2, 3 ... in the order they are played. Every number is used once.
 - teamA and teamB are each either a team from the list above, spelled exactly as shown, or "Winner of Match N" / "Loser of Match N" when that team is decided by an earlier match.
@@ -127,7 +173,7 @@ RULES
 - date is YYYY-MM-DD and time is 24-hour HH:MM, in local time. Keep every date between ${c.startDate} and ${c.endDate}.
 - venue must be one of the venues above. "venue" and "round" are optional.
 - A team can not play two matches at the same date and time.
-- List at most ${MAX_FIXTURES} fixtures.${ko ? `\n\nEXAMPLE (a 6-team knockout)\n${KO_EXAMPLE}` : ''}`;
+- List at most ${MAX_FIXTURES} fixtures.${c.formatKey === 'custom' ? GROUPS_NOTE : ''}${ko ? `\n\nEXAMPLE (a 6-team knockout)\n${KO_EXAMPLE}` : ''}`;
 }
 
 /** The stage names a knockout uses. Other labels ("Round 1", "Match 3", "Group A") are kept as written. */
@@ -175,17 +221,18 @@ function extractJson(text: string): unknown {
   throw new Error(`That is not valid JSON (${lastErr}).`);
 }
 
+const RANK = /^(.+?)\s+(?:rank|position|pos|place|#)\s*(\d{1,2})$/i;
 const REF = /^(winner|loser|w|l)\s*(?:of)?\s*(?:match|m|#)?\s*(\d{1,4})$/i;
 
 export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse {
-  const fail = (fatal: string): FixtureParse => ({ fatal, rows: [], byes: [], stages: [], notes: [], counts: { total: 0, ok: 0, warn: 0, error: 0, skip: 0 } });
+  const fail = (fatal: string): FixtureParse => ({ fatal, rows: [], byes: [], groups: [], stages: [], notes: [], counts: { total: 0, ok: 0, warn: 0, error: 0, skip: 0 } });
   let data: unknown;
   try { data = extractJson(text); } catch (e) { return fail(e instanceof Error ? e.message : 'Could not read that.'); }
 
-  const doc = Array.isArray(data) ? {} : ((data ?? {}) as { fixtures?: unknown; version?: unknown; byes?: unknown });
+  const doc = Array.isArray(data) ? {} : ((data ?? {}) as { fixtures?: unknown; version?: unknown; byes?: unknown; groups?: unknown });
   const list = Array.isArray(data) ? data : doc.fixtures;
   if (!Array.isArray(list)) return fail('Expected an object with a "fixtures" list, like the format in the prompt.');
-  if (doc.version !== undefined && doc.version !== 1 && doc.version !== FIXTURE_JSON_VERSION) return fail(`This is format version ${String(doc.version)}; this app reads versions 1 and ${FIXTURE_JSON_VERSION}.`);
+  if (doc.version !== undefined && doc.version !== 1 && doc.version !== 2 && doc.version !== 3 && doc.version !== FIXTURE_JSON_VERSION) return fail(`This is format version ${String(doc.version)}; this app reads versions 1 to ${FIXTURE_JSON_VERSION}.`);
   if (list.length === 0) return fail('The list of fixtures is empty.');
   if (list.length > MAX_FIXTURES) return fail(`That is ${list.length} fixtures; the limit is ${MAX_FIXTURES} at a time.`);
 
@@ -196,15 +243,79 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
   const bracketSigs = new Set(c.bracket.map((b) => `${b.no}|${b.date}|${b.time}|${slotKey(b.a)}|${slotKey(b.b)}`));
   const bracketNos = new Set(c.bracket.map((b) => b.no));
 
+  // groups: every team is in exactly one fixed group; a later stage's group is made of places in earlier groups
+  const groups: ParsedGroup[] = [];
+  const sizeOf = (g: ParsedGroup) => (g.from ? g.from.length : g.teams.length);
+  if (doc.groups !== undefined) {
+    const rawGroups = Array.isArray(doc.groups)
+      ? doc.groups
+      : doc.groups && typeof doc.groups === 'object' ? Object.entries(doc.groups as Record<string, unknown>).map(([name, teams]) => ({ name, teams })) : null;
+    if (!rawGroups || rawGroups.length === 0) return fail('"groups" must be a list like [ { "name": "Group A", "teams": ["…"] } ].');
+    const seen = new Map<string, string>(); // team id -> group name
+    for (const g of rawGroups) {
+      const o = (g && typeof g === 'object' ? g : {}) as { name?: unknown; teams?: unknown; from?: unknown };
+      const name = typeof o.name === 'string' ? o.name.trim().replace(/\s+/g, ' ').slice(0, 40) : '';
+      if (!name) return fail('Every group needs a "name".');
+      if (groups.some((x) => norm(x.name) === norm(name))) return fail(`Two groups are called “${name}”.`);
+      if (o.from !== undefined) {
+        if (o.teams !== undefined) return fail(`${name} has both "teams" and "from". Use "teams" for a first-stage group and "from" for a group made of earlier places.`);
+        if (!Array.isArray(o.from) || o.from.length < 2) return fail(`${name} needs a "from" list of at least two places, like ["Group A Rank 1", "Group B Rank 1"].`);
+        const from: Slot[] = [];
+        for (const t of o.from) {
+          const m = typeof t === 'string' ? RANK.exec(t.trim()) : null;
+          const src = m ? groups.find((x) => norm(x.name) === norm(m[1]!)) : undefined;
+          if (!m || !src) return fail(`“${String(t)}” in ${name} must be a place in an earlier group, like “Group A Rank 1”.`);
+          const pos = Number(m[2]);
+          if (pos < 1 || pos > sizeOf(src)) return fail(`${src.name} has only ${sizeOf(src)} places, so “${String(t)}” in ${name} does not exist.`);
+          const slot: Slot = { kind: 'rank', pos, group: src.name };
+          if (from.some((x) => slotKey(x) === slotKey(slot))) return fail(`“${slotLabel(slot)}” is listed twice in ${name}.`);
+          from.push(slot);
+        }
+        groups.push({ name, teams: [], from });
+        continue;
+      }
+      if (!Array.isArray(o.teams) || o.teams.length === 0) return fail(`${name} has no "teams".`);
+      const members: { id: string; name: string }[] = [];
+      for (const t of o.teams) {
+        const team = typeof t === 'string' ? byName.get(norm(t)) : undefined;
+        if (!team) return fail(`“${String(t)}” in ${name} is not a team in this tournament.`);
+        if (seen.has(team.id)) return fail(`${team.name} is in ${seen.get(team.id)} and ${name}. A team can be in only one group.`);
+        seen.set(team.id, name);
+        members.push({ id: team.id, name: team.name });
+      }
+      groups.push({ name, teams: members });
+    }
+    const loose = c.teams.filter((t) => !seen.has(t.id));
+    if (loose.length) return fail(`${loose.map((t) => t.name).join(', ')} ${loose.length === 1 ? 'is' : 'are'} not in any group. Every team must be in exactly one.`);
+    if (!groups.some((g) => !g.from)) return fail('At least one group must list its "teams".');
+  }
+  const groupByName = new Map(groups.map((g) => [norm(g.name), g]));
+  const groupOfTeam = new Map(groups.flatMap((g) => g.teams.map((t) => [t.id, g] as const)));
+  const groupOfPlace = new Map(groups.flatMap((g) => (g.from ?? []).map((x) => [slotKey(x), g] as const)));
+  /** The group a team or a place belongs to (a place is a member of the later-stage group built from it). */
+  const memberGroup = (x: Slot | null) => (x?.kind === 'team' ? groupOfTeam.get(x.id) : x?.kind === 'rank' ? groupOfPlace.get(slotKey(x)) : undefined);
+  const memberKey = (x: Slot | null) => (x?.kind === 'team' ? x.id : x?.kind === 'rank' ? slotKey(x) : null);
+
   // which numbers are used, so references can be checked
   const nos = list.map((raw, i) => {
     const n = (raw as { match?: unknown } | null)?.match;
     return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : typeof n === 'string' && /^\d{1,4}$/.test(n.trim()) ? Number(n) : i + 1;
   });
 
+  function rankSlot(groupRaw: string, pos: number, errs: (t: string) => void): { slot: Slot | null; label: string } {
+    const g = groupByName.get(norm(groupRaw));
+    if (!groups.length) { errs('A group place needs a "groups" list in the file.'); return { slot: null, label: groupRaw }; }
+    if (!g) { errs(`“${groupRaw}” is not one of the groups.`); return { slot: null, label: groupRaw }; }
+    if (!Number.isInteger(pos) || pos < 1) { errs('A group place is a whole number from 1.'); return { slot: null, label: groupRaw }; }
+    if (pos > sizeOf(g)) { errs(`${g.name} has only ${sizeOf(g)} teams, so there is no Rank ${pos}.`); return { slot: null, label: groupRaw }; }
+    const slot: Slot = { kind: 'rank', pos, group: g.name };
+    return { slot, label: slotLabel(slot) };
+  }
+
   function slotOf(raw: unknown, errs: (t: string) => void, side: string): { slot: Slot | null; label: string } {
     if (raw && typeof raw === 'object') {
-      const o = raw as { winnerOf?: unknown; loserOf?: unknown };
+      const o = raw as { winnerOf?: unknown; loserOf?: unknown; group?: unknown; rank?: unknown };
+      if (o.group !== undefined && o.rank !== undefined) return rankSlot(typeof o.group === 'string' ? o.group : '', Number(o.rank), errs);
       const n = Number(o.winnerOf ?? o.loserOf);
       if (Number.isInteger(n) && n > 0 && (o.winnerOf !== undefined || o.loserOf !== undefined)) {
         const slot: Slot = { kind: o.winnerOf !== undefined ? 'winner' : 'loser', match: n };
@@ -215,6 +326,8 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
     if (!name) { errs(`${side} is missing.`); return { slot: null, label: '' }; }
     const team = byName.get(norm(name));
     if (team) return { slot: { kind: 'team', id: team.id, name: team.name }, label: team.name };
+    const rk = RANK.exec(name);
+    if (rk) return rankSlot(rk[1]!, Number(rk[2]), errs);
     const m = REF.exec(name);
     if (m) {
       const slot: Slot = { kind: /^w/i.test(m[1]!) ? 'winner' : 'loser', match: Number(m[2]) };
@@ -248,14 +361,33 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
       venue = venueByName.get(norm(o.venue)) ?? o.venue.trim().slice(0, 80);
       if (!venueByName.has(norm(o.venue))) warn(`“${o.venue.trim()}” is not one of this tournament’s venues. It is kept as typed.`);
     }
-    const round = typeof o.round === 'string' && o.round.trim() ? canonicalRound(o.round).slice(0, 40) : null;
+    let round = typeof o.round === 'string' && o.round.trim() ? canonicalRound(o.round).slice(0, 40) : null;
+
+    // a group-stage fixture: its own group, both sides inside it. Its round is the group's name.
+    let group: string | null = null;
+    if (groups.length) {
+      const gm = [A.slot, B.slot].map((x) => memberGroup(x) ?? null);
+      if (typeof o.group === 'string' && o.group.trim()) {
+        const g = groupByName.get(norm(o.group));
+        if (!g) err(`“${o.group.trim()}” is not one of the groups.`);
+        else {
+          group = g.name;
+          for (const x of [A.slot, B.slot]) {
+            if (!x) continue;
+            if (g.from ? x.kind !== 'rank' : x.kind !== 'team') err(g.from ? `${g.name} is made of places from earlier groups, so its matches use those places, like “${slotLabel(g.from[0]!)}”.` : 'A group match is between two teams, not a place or a winner.');
+            else if (memberGroup(x) !== g) err(`Both sides must be in ${g.name}; do not mix groups in the group stage.`);
+          }
+        }
+      } else if (gm[0] && gm[0] === gm[1]) group = gm[0].name;
+      if (group) round = group;
+    }
 
     let skip = false;
     if (A.slot && B.slot && validDate(date) && validTime(time) && bracketSigs.has(`${no}|${date}|${time}|${slotKey(A.slot)}|${slotKey(B.slot)}`)) skip = true;
     else if (bracketNos.has(no)) err(`Match ${no} is already used by a different fixture in this tournament. Use numbers that are not taken.`);
     if (!skip && A.slot?.kind === 'team' && B.slot?.kind === 'team' && validDate(date) && existing.has(`${[A.slot.id, B.slot.id].sort().join('|')}|${date}`)) skip = true;
     if (skip) warn('Already in this tournament, so it will be skipped.');
-    return { index, no, round, date, time, venue, a: A.slot, b: B.slot, labelA: A.label, labelB: B.label, skip, issues };
+    return { index, no, round, date, time, venue, group, a: A.slot, b: B.slot, labelA: A.label, labelB: B.label, skip, issues };
   });
 
   const at = (i: number) => rows[i]!;
@@ -282,6 +414,51 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
     }
   }
   for (const [k, idxs] of used) if (idxs.length > 1) for (const i of idxs) at(i).issues.push({ level: 'error', text: `${slotLabel(at(i).a && slotKey(at(i).a) === k ? at(i).a : at(i).b)} is used by more than one match.` });
+
+  // groups: every pair plays once, every member plays the whole group, and places come from the tables
+  if (groups.length) {
+    const seenPair = new Map<string, number>(); // pair -> match number
+    for (const r of rows) {
+      const ka = memberKey(r.a), kb = memberKey(r.b);
+      if (r.skip || !r.group || !ka || !kb) continue;
+      const k = [ka, kb].sort().join('|');
+      const first = seenPair.get(k);
+      if (first !== undefined) r.issues.push({ level: 'error', text: `${r.labelA} and ${r.labelB} already play each other in ${r.group} (Match ${first}). In a group every pair plays once.` });
+      else seenPair.set(k, r.no);
+    }
+    for (const g of groups) {
+      const mine = rows.filter((r) => r.group === g.name);
+      const first = mine[0] ?? rows[0]!;
+      const members = g.from ? g.from.map((x) => ({ key: slotKey(x), name: slotLabel(x) })) : g.teams.map((t) => ({ key: t.id, name: t.name }));
+      if (members.length < 2) { first.issues.push({ level: 'error', text: `${g.name} needs at least two teams.` }); continue; }
+      const need = members.length - 1;
+      const bad = members.filter((m) => mine.filter((r) => memberKey(r.a) === m.key || memberKey(r.b) === m.key).length !== need);
+      if (bad.length) first.issues.push({ level: 'error', text: `${g.name} must be a full round robin: each of its ${members.length} teams plays the other ${need} once. ${bad.map((m) => m.name).join(', ')} ${bad.length === 1 ? 'does' : 'do'} not.` });
+    }
+    const lastOf = (g: string) => rows.filter((r) => r.group === g && validDate(r.date) && validTime(r.time)).map(when).sort().at(-1);
+    for (const r of rows) {
+      for (const s of [r.a, r.b]) {
+        if (s?.kind === 'rank' && s.group) {
+          const end = lastOf(s.group);
+          if (end && validDate(r.date) && validTime(r.time) && when(r) <= end) r.issues.push({ level: 'error', text: `${slotLabel(s)} is only known after ${s.group} finishes (${end}), but this match is earlier.` });
+        }
+        if (isMatchRef(s)) {
+          const src = rows.find((x) => x.no === s.match);
+          if (src?.group) r.issues.push({ level: 'error', text: `${slotLabel(s)} is a group match. Knockout places come from the final group table (for example “${src.group} Rank 1”), never from a group match winner.` });
+        }
+      }
+    }
+    // a place goes to one thing only: one later-stage group, or one knockout match
+    const rankUse = new Map<string, { rows: number[]; groups: string[] }>();
+    const use = (k: string) => rankUse.get(k) ?? rankUse.set(k, { rows: [], groups: [] }).get(k)!;
+    for (const g of groups) for (const x of g.from ?? []) use(slotKey(x)).groups.push(g.name);
+    for (const r of rows) if (!r.group) for (const s of [r.a, r.b]) if (s?.kind === 'rank') use(slotKey(s)).rows.push(r.index);
+    for (const [k, u] of rankUse) {
+      if (u.rows.length + u.groups.length < 2) continue;
+      const text = u.groups.length ? `A place can only be used once, but it is used by ${u.groups.length + u.rows.length} things (${[...u.groups.map((g) => `the group ${g}`), ...u.rows.map((i) => `Match ${at(i).no}`)].join(', ')}).` : 'A group place can only be used by one knockout match.';
+      for (const i of u.rows.length ? u.rows : [0]) at(i).issues.push({ level: 'error', text });
+    }
+  }
 
   // byes
   const byes: { id: string; name: string }[] = [];
@@ -317,7 +494,7 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
   if (c.formatKey === 'ko' || hasRefs) {
     const last = [...rows].filter((r) => validDate(r.date) && validTime(r.time)).sort((x, y) => (when(y) < when(x) ? -1 : when(y) > when(x) ? 1 : y.no - x.no))[0];
     for (const r of rows) {
-      if (r === last || r.skip) continue;
+      if (r === last || r.skip || r.group) continue;
       if (!used.has(`W${r.no}`) && !used.has(`L${r.no}`)) r.issues.push({ level: 'warn', text: `Nobody plays the winner of Match ${r.no}. Only the final should be last.` });
     }
     const named = new Set<string>(byes.map((b) => b.id));
@@ -364,6 +541,7 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
       }
     }
   }
+  for (const r of rows) if (!r.round && (r.a?.kind === 'rank' || r.b?.kind === 'rank')) r.round = 'Knockout';
   const order = new Map<string, { first: string; count: number }>();
   for (const r of rows) {
     const key = r.round ?? 'Matches';
@@ -378,5 +556,5 @@ export function parseFixtureJson(text: string, c: FixtureContext): FixtureParse 
     else if (r.issues.some((i) => i.level === 'warn')) counts.warn++;
     else counts.ok++;
   }
-  return { fatal: null, rows, byes, stages, notes: global, counts };
+  return { fatal: null, rows, byes, groups, stages, notes: global, counts };
 }
