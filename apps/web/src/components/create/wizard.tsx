@@ -8,7 +8,7 @@ import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
 import { addTeam, addVenue, createMatchAction, publishTournament } from '@/app/tournaments/create/actions';
 import { toast } from '@/components/ratch/toast';
-import { newMatchHref, scoreHref } from '@/lib/match-href';
+import { scoreHref } from '@/lib/match-href';
 
 type Mode = 'tournament' | 'match';
 interface Sport { id: string; key: string; name: string }
@@ -630,10 +630,7 @@ export function Wizard(props: Props) {
               </p>
               <div className="cw-done-actions">
                 {done.kind === 'tournament' ? (
-                  <>
-                    <Link href={`/tournaments/${done.id}`} className="cw-btn" data-variant="blue">VIEW TOURNAMENT</Link>
-                    <Link href={newMatchHref(done.id)} className="cw-btn" data-variant="gray">CREATE A MATCH</Link>
-                  </>
+                  <Link href={`/tournaments/${done.id}`} className="cw-btn" data-variant="blue">VIEW TOURNAMENT</Link>
                 ) : (
                   <>
                     <Link href={done.tournamentId ? `/tournaments/${done.tournamentId}/matches/${done.id}` : `/sports/cricket/matches/${done.id}`} className="cw-btn" data-variant="blue">VIEW MATCH</Link>
