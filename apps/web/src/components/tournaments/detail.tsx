@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { TournamentDetail } from '@sports/scoring';
 import { minTeamsFor } from '@sports/shared';
 import { Leaderboards } from './leaderboards';
-import { STAGES, stageTitle } from '@sports/sports-engine/src/fixture-import';
+import { stageTitle } from '@sports/sports-engine/src/fixture-import';
 import { EditMatchSchedule, EditPendingFixture } from '@/components/match/edit-schedule';
 import { EditTournament } from './edit-tournament';
 import { FixturesImport } from './fixtures-import';
@@ -39,12 +39,12 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
     ['DATES', ready ? `${dateLabel(t.startsAt)} – ${dateLabel(t.endsAt)}` : '—'],
   ];
 
-  // Fixtures are grouped by stage (Round 1, Semi-finals, Final) when they carry stage names, and by local day otherwise,
+  // Fixtures are grouped by round (Round 1, League Round 2, Semi-finals, Final: whatever name they carry), and by local day otherwise,
   // oldest first. A Table tournament shows its league rounds, then Semi-finals and the Final, each under its own heading.
   // Imported fixtures still waiting on a result sit alongside real matches.
   type Item = { at: string; m?: (typeof t.matches)[number]; p?: (typeof t.pending)[number] };
   const venueNames = (t.meta?.venues ?? []).map((v) => v.name);
-  const stageLike = (r: string | null | undefined): r is string => !!r && ((STAGES as readonly string[]).includes(r) || /^Round \d+$/i.test(r));
+  const stageLike = (r: string | null | undefined): r is string => !!r?.trim();
   const dayText = (at: string) => (at === '9999' ? 'DATE TO BE CONFIRMED' : new Date(at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase());
   const roundOf = (it: Item) => it.m?.round ?? it.p?.round ?? null;
   const days = useMemo(() => {
@@ -54,7 +54,8 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
     ].sort((a, b) => a.at.localeCompare(b.at));
     const map = new Map<string, Item[]>();
     for (const it of items) {
-      const key = stageLike(roundOf(it)) ? `s:${roundOf(it)}` : `d:${dayText(it.at)}`;
+      const rd = roundOf(it);
+      const key = stageLike(rd) ? `s:${rd.trim().replace(/\s+/g, ' ')}` : `d:${dayText(it.at)}`;
       map.set(key, [...(map.get(key) ?? []), it]);
     }
     return [...map]; // groups come out in the order they are first played
