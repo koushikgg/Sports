@@ -5,6 +5,7 @@ import { and, count, eq, getDb, inArray, matches, sql, sports, teams, tournament
 import { FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, tournamentEditSchema, type TournamentMeta } from '@sports/shared';
 import { rebuildFixtures, tournamentStarted } from '@sports/scoring';
 import { planTournament, toInstant } from '@sports/sports-engine/src/tournament-plan';
+import { foosballRules } from '@sports/sports-engine/src/foosball';
 import { audit, requireRole } from '@/lib/guard';
 
 const uuid = z.string().uuid();
@@ -111,6 +112,9 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
   if (!found) return { error: 'This tournament has no saved setup to edit.' };
   const { meta } = found;
   const cricket = found.sportKey === 'cricket';
+  const foos = found.sportKey === 'foosball';
+  const rules = foos ? foosballRules(v.rules ?? meta.rules) : undefined;
+  const rulesChanged = !!rules && JSON.stringify(rules) !== JSON.stringify(foosballRules(meta.rules));
   const started = await tournamentStarted(v.tournamentId);
 
   const sameSchedule = v.schedule.perDay === meta.schedule.perDay && v.schedule.firstMatchTime === meta.schedule.firstMatchTime && v.schedule.restDay === meta.schedule.restDay;
@@ -119,6 +123,7 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
       v.formatKey !== meta.formatKey && 'the format',
       v.qualify !== meta.qualify && 'how many qualify',
       cricket && (v.overs ?? meta.overs) !== meta.overs && 'the overs',
+      rulesChanged && 'the match rules',
       !sameSchedule && 'the daily schedule',
       meta.formatKey === 'lk' && fitMatchesPerTeam(meta.teams.length, v.matchesPerTeam) !== fitMatchesPerTeam(meta.teams.length, meta.matchesPerTeam) && 'the matches per team',
     ].filter(Boolean);
@@ -148,6 +153,7 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
     formatKey: v.formatKey,
     ...(perTeam ? { matchesPerTeam: perTeam } : {}),
     ...(overs ? { overs } : {}),
+    ...(rules ? { rules } : {}),
     venues: v.venueIds.map((id) => ({ id, name: byId.get(id)!.name })),
     points: v.points,
     qualify: v.qualify,
@@ -178,7 +184,12 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
     v.startDate !== meta.schedule.startDate || !sameSchedule || v.qualify !== meta.qualify || overs !== meta.overs ||
     v.venueIds.join() !== meta.venues.map((x) => x.id).join() || perTeam !== fitMatchesPerTeam(meta.teams.length, meta.matchesPerTeam);
   if (!started && (formatChanged || (table && scheduleChanged))) cleared = (await rebuildFixtures(v.tournamentId)).removed;
-  else if (!started && overs && overs !== meta.overs) {
+  else if (!started && rulesChanged) {
+    await db
+      .update(matches)
+      .set({ config: sql`${matches.config} || ${JSON.stringify(rules)}::jsonb` })
+      .where(and(eq(matches.tournamentId, v.tournamentId), eq(matches.status, 'scheduled'), eq(matches.lastSeq, 0)));
+  } else if (!started && overs && overs !== meta.overs) {
     await db
       .update(matches)
       .set({ config: sql`${matches.config} || jsonb_build_object('overs', ${overs}::int, 'powerplayOvers', least(coalesce((${matches.config}->>'powerplayOvers')::int, 6), ${overs}::int), 'maxOversPerBowler', ceil(${overs}::numeric / 5)::int)` })

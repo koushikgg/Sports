@@ -31,15 +31,14 @@ export function useLiveMatch(initial: MatchSnapshot, socketFactory?: () => Promi
     let cancelled = false;
     let active: Socket | null = null;
 
+    // "connected" means joined: until the server has put us in the match's room we would miss its updates, and a
+    // score sent in that gap would leave this screen a step behind
     const join = () => {
       active?.emit(ClientEvents.joinMatch, { matchId }, (res: Ack<{ snapshot: MatchSnapshot }>) => {
-        if (res.ok) apply(res.snapshot);
+        if (res.ok) { apply(res.snapshot); setConnected(true); }
       });
     };
-    const onConnect = () => {
-      setConnected(true);
-      join();
-    };
+    const onConnect = () => join();
     const onDisconnect = () => setConnected(false);
     const onUpdate = (u: MatchUpdate) => {
       if (u.matchId !== matchId) return;

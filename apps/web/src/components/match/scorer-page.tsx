@@ -4,6 +4,7 @@ import { getMatchCard, getSnapshot, matchAccess } from '@sports/scoring';
 import { canScoreMatch } from '@sports/shared';
 import { CricketScorer } from '@/components/cricket/scorer';
 import { PrivateNotice } from '@/components/ratch/private-notice';
+import { FoosballScorer } from '@/components/foosball/scorer';
 import { ScorerDebug } from '@/components/scorer-debug';
 import { PageHeader } from '@/components/ui';
 import { matchHref, scoreHref } from '@/lib/match-href';
@@ -28,6 +29,7 @@ export async function ScorerPageView({ id, where }: { id: string; where: { sport
   if (!canScoreMatch(user, card)) redirect(matchHref(card));
 
   if (snapshot.sportKey === 'cricket') return <CricketScorer initial={snapshot} venue={card.venue} backHref={matchHref(card)} />;
+  if (snapshot.sportKey === 'foosball') return <FoosballScorer initial={snapshot} venue={card.venue} backHref={matchHref(card)} />;
   return (
     <div className="mx-auto max-w-xl p-6">
       <PageHeader title="Scorer console" />

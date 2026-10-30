@@ -1,0 +1,35 @@
+/* Foosball scorer: reuses the console frame from cricket/ratch.css. */
+.fb-status { display: flex; align-items: baseline; gap: 12px; padding: 4px 4px 0; color: var(--text-secondary); }
+.fb-status b { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.fb-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fb-panel { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 340px; padding: 24px 16px; border-radius: 24px; background: var(--surface-card); color: var(--text-primary); text-align: center; transition: transform 120ms, background 160ms, filter 160ms; }
+.fb-panel[data-side='a'] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--blue) 55%, transparent); }
+.fb-panel[data-side='b'] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--amber) 55%, transparent); }
+.fb-panel:hover:not(:disabled) { filter: brightness(1.12); }
+.fb-panel:active:not(:disabled) { transform: scale(0.985); }
+.fb-panel:disabled { opacity: 0.85; cursor: default; }
+.fb-panel[data-win='true'] { background: color-mix(in srgb, #34c759 18%, var(--surface-card)); }
+.fb-team { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: -0.02em; text-wrap: balance; }
+.fb-score { font-family: var(--font-mono); font-weight: 700; font-size: clamp(96px, 16vw, 168px); line-height: 1; font-variant-numeric: tabular-nums; }
+.fb-dots { display: flex; align-items: center; gap: 8px; }
+.fb-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--surface-muted); }
+.fb-dots i[data-on='true'] { background: #34c759; }
+.fb-dots small { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--text-secondary); margin-left: 4px; }
+.fb-tap { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 28px; border-radius: 999px; background: var(--surface-muted); font-family: var(--font-mono); font-size: 14px; font-weight: 700; letter-spacing: 0.06em; }
+.fb-tap kbd { font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--surface-sunken); color: var(--text-tertiary); }
+.fb-games { display: flex; flex-wrap: wrap; gap: 8px; }
+.fb-game { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-radius: 14px; background: var(--surface-card); }
+.fb-game small { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--text-tertiary); }
+.fb-game b { font-family: var(--font-mono); font-size: 20px; }
+.fb-game em { font-style: normal; font-size: 12px; color: var(--text-secondary); }
+@media (max-width: 640px) { .fb-panel { min-height: 240px; } .fb-panels { gap: 8px; } }
+
+/* match page card */
+.fb-card { padding: 20px; border-radius: 20px; background: var(--surface-card); display: grid; gap: 12px; margin-top: 12px; }
+.fb-card-head { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); }
+.fb-table { display: grid; gap: 4px; }
+.fb-trow { display: grid; grid-template-columns: 70px 1fr 1fr 1.4fr; gap: 8px; align-items: center; padding: 12px 14px; border-radius: 8px; background: var(--surface-sunken); font-family: var(--font-mono); font-size: 14px; color: var(--text-secondary); }
+.fb-thead { background: transparent; padding-top: 0; padding-bottom: 0; }
+.fb-trow b { font-size: 20px; color: var(--text-primary); }
+.fb-trow b[data-win='true'] { color: #6fe08d; }
+.fb-trow[data-live='true'] { box-shadow: inset 4px 0 0 var(--red); }

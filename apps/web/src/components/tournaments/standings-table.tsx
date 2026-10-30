@@ -21,7 +21,7 @@ export function StandingsTable({ rows, qualify, showQualify, cricket, title, leg
               <span className="tn-pos">{i + 1}</span>
               <span className="tn-team"><i style={{ background: tint.bg, color: tint.fg }}>{teamCode(r.name, r.short)}</i><b>{r.name}</b></span>
               <span>{r.played}</span><span>{r.won}</span><span>{r.lost}</span><span>{r.tied}</span><span>{r.noResult}</span>
-              <span data-neg={cricket && r.diff < 0 ? 'true' : undefined}>{cricket && r.played ? `${r.diff >= 0 ? '+' : ''}${r.diff.toFixed(2)}` : '—'}</span>
+              <span data-neg={r.played && r.diff < 0 ? 'true' : undefined}>{r.played ? `${r.diff >= 0 ? '+' : ''}${cricket ? r.diff.toFixed(2) : Math.round(r.diff)}` : '—'}</span>
               <span className="tn-form">{r.form.map((f, k) => <i key={k} data-r={f}>{f}</i>)}</span>
               <span className="tn-pts">{r.points}</span>
             </div>

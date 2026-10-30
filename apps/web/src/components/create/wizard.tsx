@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { FIXTURE_TYPES, FORMATS, TIEBREAKS, VISIBILITIES, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FormatKey, type Visibility } from '@sports/shared';
+import { BEST_OF_OPTIONS, FIRST_TO_OPTIONS, FIXTURE_TYPES, FOOSBALL_DEFAULTS, FORMATS, TIEBREAKS, VISIBILITIES, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FoosballRules, type FormatKey, type Visibility } from '@sports/shared';
 import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
 import { addDays, planTournament } from '@sports/sports-engine/src/tournament-plan';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
@@ -133,6 +133,7 @@ export function Wizard(props: Props) {
     name: '', visibility: 'public' as 'public' | 'private', sportId: cricket?.id ?? sports[0]?.id ?? '', start: '', end: '', venueIds: [] as string[],
     formatKey: 'lk' as FormatKey, overs: 20, points: { win: 2, tie: 1, noResult: 1 }, qualify: 4 as 2 | 4, perTeam: null as number | null,
     tiebreak: 'NRR' as (typeof TIEBREAKS)[number], teamIds: [] as string[], perDay: 2, firstTime: '18:00', rest: false,
+    fr: { ...FOOSBALL_DEFAULTS } as FoosballRules,
   });
 
   const [m, setM] = useState({
@@ -151,6 +152,7 @@ export function Wizard(props: Props) {
   const tournament = props.tournaments.find((x) => x.id === m.tournamentId) ?? null;
   const tSport = sports.find((s) => s.id === t.sportId);
   const tIsCricket = tSport?.key === 'cricket';
+  const tIsFoos = tSport?.key === 'foosball';
   const sportTeams = teamList.filter((x) => x.sportId === t.sportId);
   const matchTeams = tournament ? teamList.filter((x) => tournament.teamIds.includes(x.id)) : teamList.filter((x) => x.sportId === cricket?.id);
   const cricketTournaments = props.tournaments.filter((x) => x.sportId === cricket?.id);
@@ -271,7 +273,7 @@ export function Wizard(props: Props) {
       if (mode === 'tournament') {
         const r = await publishTournament({
           name: t.name, visibility: t.visibility, sportId: t.sportId, startDate: t.start, endDate: t.end, venueIds: t.venueIds, formatKey: t.formatKey,
-          ...(tIsCricket ? { overs: t.overs } : {}), points: t.points, qualify: t.qualify, ...(perTeam ? { matchesPerTeam: perTeam } : {}), tiebreak: t.tiebreak, teamIds: t.teamIds,
+          ...(tIsCricket ? { overs: t.overs } : {}), ...(tIsFoos ? { rules: t.fr } : {}), points: t.points, qualify: t.qualify, ...(perTeam ? { matchesPerTeam: perTeam } : {}), tiebreak: t.tiebreak, teamIds: t.teamIds,
           schedule: { perDay: t.perDay, firstMatchTime: t.firstTime, restDay: t.rest }, tzOffset,
         });
         if (!r.ok) return setServerError(r.error);
@@ -304,7 +306,7 @@ export function Wizard(props: Props) {
   const review: [string, string, number][] = isT
     ? [
         ['NAME', t.name || '—', 0], ['SPORT', tSport?.name ?? '—', 0], ['DATES', `${fmtD(t.start)} – ${fmtD(t.end)}`, 0], ['VENUES', t.venueIds.map(venueName).join(', ') || 'None yet', 0], ['WHO CAN SEE IT', t.visibility === 'private' ? 'Private: admins and managers only' : 'Public: everyone', 0],
-        ['FORMAT', `${FORMATS[t.formatKey].label}${tIsCricket ? ` · ${t.overs} overs` : ''}${t.formatKey === 'lk' ? ` · top ${t.qualify} qualify` : ''}`, 1],
+        ['FORMAT', `${FORMATS[t.formatKey].label}${tIsCricket ? ` · ${t.overs} overs` : ''}${tIsFoos ? ` · ${t.fr.bestOf === 1 ? 'single game' : `best of ${t.fr.bestOf}`} to ${t.fr.firstTo}${t.fr.winBy === 2 ? ', win by 2' : ''}` : ''}${t.formatKey === 'lk' ? ` · top ${t.qualify} qualify` : ''}`, 1],
         ['POINTS', `Win ${t.points.win} · Tie ${t.points.tie} · No result ${t.points.noResult} · Tiebreak ${t.tiebreak}`, 1],
         ['TEAMS', t.teamIds.map((id) => teamById(id)?.name).filter(Boolean).join(', ') || '—', 2],
         ['SCHEDULE', `${plan.totalMatches} matches over ${plan.matchDays} days, ${t.perDay} per day from ${fmtT(t.firstTime)}${t.rest ? ', rest day between rounds' : ''}`, 3],
@@ -331,7 +333,7 @@ export function Wizard(props: Props) {
       <>
         <Field label="TOURNAMENT NAME"><input className="cw-input cw-input-lg" value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} placeholder="e.g. Winter T20 Cup" maxLength={80} /></Field>
         <div className="cw-block"><Label>SPORT</Label>
-          <Pills dot value={t.sportId} onPick={(v) => setT({ ...t, sportId: v, teamIds: [], tiebreak: sports.find((s) => s.id === v)?.key === 'cricket' ? 'NRR' : 'DIFFERENCE' })} options={sports.map((s) => ({ v: s.id, l: s.name.toUpperCase(), dot: sportColor(s.key) }))} /></div>
+          <Pills dot value={t.sportId} onPick={(v) => setT({ ...t, sportId: v, teamIds: [], tiebreak: sports.find((s) => s.id === v)?.key === 'cricket' ? 'NRR' : 'DIFFERENCE', points: sports.find((s) => s.id === v)?.key === 'foosball' ? { win: 1, tie: 0, noResult: 0 } : { win: 2, tie: 1, noResult: 1 } })} options={sports.map((s) => ({ v: s.id, l: s.name.toUpperCase(), dot: sportColor(s.key) }))} /></div>
         <div className="cw-two">
           <Field label="STARTS"><input type="date" className="cw-input" value={t.start} onChange={(e) => setT({ ...t, start: e.target.value })} /></Field>
           <Field label="ENDS"><input type="date" className="cw-input" value={t.end} min={t.start} onChange={(e) => setT({ ...t, end: e.target.value })} /></Field>
@@ -361,6 +363,23 @@ export function Wizard(props: Props) {
               <Stepper label="overs" value={t.overs} min={1} max={50} onChange={(n) => setT({ ...t, overs: n })} />
             </div>
           </div>
+        )}
+        {tIsFoos && (
+          <>
+            <div className="cw-block"><Label>MATCH</Label>
+              <Pills value={t.fr.bestOf} onPick={(v) => setT({ ...t, fr: { ...t.fr, bestOf: v } })} options={BEST_OF_OPTIONS.map((v) => ({ v, l: v === 1 ? 'SINGLE GAME' : `BEST OF ${v}` }))} />
+            </div>
+            <div className="cw-block"><Label>GAME GOES TO</Label>
+              <div className="cw-inline">
+                <Pills value={t.fr.firstTo} onPick={(v) => setT({ ...t, fr: { ...t.fr, firstTo: v } })} options={FIRST_TO_OPTIONS.map((v) => ({ v: v as number, l: `${v} GOALS` }))} />
+                <Stepper label="goals" value={t.fr.firstTo} min={1} max={50} onChange={(n) => setT({ ...t, fr: { ...t.fr, firstTo: n } })} />
+              </div>
+            </div>
+            <div className="cw-block"><Label>FINISHING A GAME</Label>
+              <Pills value={t.fr.winBy} onPick={(v) => setT({ ...t, fr: { ...t.fr, winBy: v } })} options={[{ v: 1 as const, l: 'FIRST TO THE TARGET' }, { v: 2 as const, l: 'MUST WIN BY 2' }]} />
+              <p className="cw-muted">{t.fr.bestOf === 1 ? 'One game decides the match.' : `The first side to win ${Math.floor(t.fr.bestOf / 2) + 1} games wins the match.`} A game ends at {t.fr.firstTo} goals{t.fr.winBy === 2 ? ' with a two-goal lead, however long that takes' : ''}. Goal difference counts across every game.</p>
+            </div>
+          </>
         )}
         <div className="cw-block"><Label>POINTS</Label>
           <div className="cw-points">

@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import type { MatchSnapshot } from '@sports/shared';
 import type { CricketState } from '@sports/sports-engine/src/cricket';
 import { CricketTv } from '@/components/cricket/tv';
+import type { FoosballState } from '@sports/sports-engine/src/foosball';
+import { FoosballTv } from '@/components/foosball/tv';
 import { useLiveMatch } from '@/lib/use-live-match';
 
 export function TvBoard({ initial, title }: { initial: MatchSnapshot; title: string }) {
@@ -35,6 +37,8 @@ export function TvBoard({ initial, title }: { initial: MatchSnapshot; title: str
       <div className="min-h-0 flex-1">
         {snapshot.sportKey === 'cricket' ? (
           <CricketTv state={snapshot.state as CricketState} names={names} status={snapshot.summary.status} />
+        ) : snapshot.sportKey === 'foosball' && (snapshot.state as FoosballState | null)?.kind === 'foosball' ? (
+          <FoosballTv state={snapshot.state as FoosballState} status={snapshot.summary.status} />
         ) : (
           <div className="flex h-full flex-col justify-center gap-10">
             {snapshot.summary.sides.map((s) => (

@@ -71,7 +71,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
             <h2>{t.name}</h2>
           </div>
           <div className="tn-actions">
-            {isAdmin && t.meta && venues && <EditTournament id={t.id} name={t.name} visibility={t.visibility} meta={t.meta} cricket={cricket} venues={venues} started={t.started} fixtureCount={t.fixtureCount} teamCount={t.meta.teams.length} />}
+            {isAdmin && t.meta && venues && <EditTournament id={t.id} name={t.name} visibility={t.visibility} meta={t.meta} cricket={cricket} foosball={t.sportKey === 'foosball'} venues={venues} started={t.started} fixtureCount={t.fixtureCount} teamCount={t.meta.teams.length} />}
             {isAdmin && cricket && t.meta?.formatKey !== 'lk' && !t.started && <Link href={newMatchHref(t.id)} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
           </div>
         </div>

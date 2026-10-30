@@ -12,6 +12,8 @@ import { LocalTime } from '@/components/local-time';
 import { displayHref, scoreHref } from '@/lib/match-href';
 import type { MatchCardData } from '@/lib/queries';
 import { useLiveMatch } from '@/lib/use-live-match';
+import type { FoosballState } from '@sports/sports-engine/src/foosball';
+import { FoosballCard } from '@/components/foosball/card';
 
 const TONE: Record<ChipData['kind'], string> = {
   dot: 'var(--text-tertiary)', run: 'var(--text-primary)', four: '#4d94ff', six: 'var(--green)', wicket: 'var(--red-text)', extra: 'var(--amber)',
@@ -83,6 +85,7 @@ export function LiveMatch({ initial, card, canScore }: { initial: MatchSnapshot;
           )}
         </section>
         {cricket && <ScorerCard s={s} names={names} />}
+        {snapshot.sportKey === 'foosball' && (snapshot.state as FoosballState | null)?.kind === 'foosball' && <FoosballCard s={snapshot.state as FoosballState} />}
       </>
     );
   }

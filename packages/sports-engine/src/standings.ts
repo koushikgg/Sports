@@ -15,6 +15,8 @@ export interface FinishedMatch {
   outcome: 'win' | 'tie' | 'no_result';
   /** Cricket only: used for net run rate. */
   stats?: Record<string, TeamMatchStats>;
+  /** Goal sports: goals each team scored and conceded, used for goal difference. */
+  goals?: Record<string, { for: number; against: number }>;
 }
 
 export interface Points {
@@ -31,7 +33,7 @@ export interface Standing {
   tied: number;
   noResult: number;
   points: number;
-  /** Net run rate (cricket) or 0. */
+  /** Net run rate (cricket), goal difference (foosball) or 0. */
   diff: number;
   /** Most recent results, newest last: W, L or T. */
   form: ('W' | 'L' | 'T')[];
@@ -45,8 +47,8 @@ export function computeStandings(
   points: Points,
   tiebreak: string,
 ): Standing[] {
-  const rows = new Map<string, Standing & { sums: TeamMatchStats }>(
-    teamIds.map((id) => [id, { teamId: id, played: 0, won: 0, lost: 0, tied: 0, noResult: 0, points: 0, diff: 0, form: [], sums: { runsFor: 0, ballsFaced: 0, runsAgainst: 0, ballsBowled: 0 } }]),
+  const rows = new Map<string, Standing & { sums: TeamMatchStats; goalDiff: number }>(
+    teamIds.map((id) => [id, { teamId: id, played: 0, won: 0, lost: 0, tied: 0, noResult: 0, points: 0, diff: 0, form: [], sums: { runsFor: 0, ballsFaced: 0, runsAgainst: 0, ballsBowled: 0 }, goalDiff: 0 }]),
   );
 
   for (const m of matches) {
@@ -64,6 +66,8 @@ export function computeStandings(
       } else {
         r.noResult += 1; r.points += points.noResult;
       }
+      const gl = m.goals?.[id];
+      if (gl) r.goalDiff += gl.for - gl.against;
       const st = m.stats?.[id];
       if (st) {
         r.sums.runsFor += st.runsFor; r.sums.ballsFaced += st.ballsFaced;
@@ -77,7 +81,7 @@ export function computeStandings(
     const nrr = sums.ballsFaced && sums.ballsBowled
       ? (sums.runsFor * BALLS) / sums.ballsFaced - (sums.runsAgainst * BALLS) / sums.ballsBowled
       : 0;
-    return { ...r, diff: nrr, form: r.form.slice(-5) };
+    return { ...r, diff: nrr || r.goalDiff, form: r.form.slice(-5) };
   });
 
   // wins between the teams that are level on points, for the head-to-head tiebreak
@@ -97,5 +101,5 @@ export function computeStandings(
     return y.diff - x.diff || y.won - x.won;
   });
 
-  return list.map(({ sums: _sums, ...r }) => r);
+  return list.map(({ sums: _sums, goalDiff: _g, ...r }) => r);
 }

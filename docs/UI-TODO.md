@@ -89,7 +89,7 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 - [x] **Knockout slots fill themselves (cricket).** Fixtures with two known teams become scheduled matches at once; a
   "Winner of Match N" slot becomes a match when that match completes with a winner (checked whenever the tournament page is
   opened, and safe to run twice). Until then it shows as TEAMS TBD.
-- [ ] **Sports without a scoring engine (foosball).** Their fixtures are saved as a schedule only (no match rows), because
+- [x] (done, foosball now has an engine) **Sports without a scoring engine.** Their fixtures are saved as a schedule only (no match rows), because
   a match for a sport with no engine would break the match lists. Foosball is also switched off in Admin > Sports. Needs the
   foosball engine (Phase 5) and a way to record a winner so the bracket can advance.
 - [ ] A drawn knockout match (tie, no winner) leaves its next slot waiting; an admin needs a way to pick the winner.
@@ -123,7 +123,7 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 
 ## Engine and data
 
-- [ ] Foosball engine, scorer and live view (Phase 5).
+- [x] Foosball engine, scorer, live view and TV mode: see docs/FOOSBALL.md. [ ] Doubles/lineups, foosball leaderboards, single matches outside a tournament.
 - [ ] Super over and DLS for cricket.
 - [ ] Edit forms for teams, players, tournaments and matches in admin; fixture generation.
 - [ ] Redis for more than one realtime instance; audit log UI; rate limits (Phase 6).

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FIXTURE_TYPES, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FormatKey, type TournamentMeta } from '@sports/shared';
+import { BEST_OF_OPTIONS, FIRST_TO_OPTIONS, FIXTURE_TYPES, FOOSBALL_DEFAULTS, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FoosballRules, type FormatKey, type TournamentMeta } from '@sports/shared';
 import { addVenue } from '@/app/tournaments/create/actions';
 import { updateTournament } from '@/app/tournaments/[id]/actions';
 import '@/components/teams/team-manage.css';
@@ -13,14 +13,14 @@ const box: React.CSSProperties = { display: 'grid', gap: 6 };
 const row: React.CSSProperties = { display: 'flex', gap: 6, flexWrap: 'wrap' };
 
 /** Admin's editor for a saved tournament's settings. Format, qualifiers, overs and the daily schedule lock once play starts. */
-export function EditTournament({ id, name, visibility, meta, cricket, venues: allVenues, started, fixtureCount, teamCount }: {
-  id: string; name: string; visibility: 'public' | 'private'; meta: TournamentMeta; cricket: boolean; venues: { id: string; name: string }[]; started: boolean; fixtureCount: number; teamCount: number;
+export function EditTournament({ id, name, visibility, meta, cricket, foosball, venues: allVenues, started, fixtureCount, teamCount }: {
+  id: string; name: string; visibility: 'public' | 'private'; meta: TournamentMeta; cricket: boolean; foosball: boolean; venues: { id: string; name: string }[]; started: boolean; fixtureCount: number; teamCount: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const init = () => ({
     name, visibility, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate, venueIds: meta.venues.map((v) => v.id).filter((vid) => allVenues.some((v) => v.id === vid)), formatKey: meta.formatKey as FormatKey,
-    perTeam: fitMatchesPerTeam(teamCount, meta.matchesPerTeam) ?? Math.max(1, teamCount - 1), overs: meta.overs ?? 20, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
+    perTeam: fitMatchesPerTeam(teamCount, meta.matchesPerTeam) ?? Math.max(1, teamCount - 1), overs: meta.overs ?? 20, rules: { ...FOOSBALL_DEFAULTS, ...(meta.rules ?? {}) } as FoosballRules, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
     perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime, restDay: meta.schedule.restDay,
   });
   const [f, setF] = useState(init);
@@ -38,7 +38,7 @@ export function EditTournament({ id, name, visibility, meta, cricket, venues: al
   // a Table makes its fixtures again when the things they depend on change; a Custom list is cleared when the type changes
   const perTeamOptions = matchesPerTeamOptions(teamCount);
   const wantPerTeam = f.perTeam >= teamCount - 1 ? undefined : fitMatchesPerTeam(teamCount, f.perTeam);
-  const scheduleTouched = wantPerTeam !== fitMatchesPerTeam(teamCount, meta.matchesPerTeam) || f.startDate !== meta.schedule.startDate || f.perDay !== meta.schedule.perDay || f.firstMatchTime !== meta.schedule.firstMatchTime || f.restDay !== meta.schedule.restDay || f.qualify !== meta.qualify || (cricket && f.overs !== (meta.overs ?? 20)) || f.venueIds.join() !== meta.venues.map((v) => v.id).join();
+  const scheduleTouched = wantPerTeam !== fitMatchesPerTeam(teamCount, meta.matchesPerTeam) || f.startDate !== meta.schedule.startDate || f.perDay !== meta.schedule.perDay || f.firstMatchTime !== meta.schedule.firstMatchTime || f.restDay !== meta.schedule.restDay || f.qualify !== meta.qualify || (cricket && f.overs !== (meta.overs ?? 20)) || (foosball && JSON.stringify(f.rules) !== JSON.stringify({ ...FOOSBALL_DEFAULTS, ...(meta.rules ?? {}) })) || f.venueIds.join() !== meta.venues.map((v) => v.id).join();
   const remakes = !started && fixtureCount > 0 && table && (formatChanged || scheduleTouched);
   const types: FormatKey[] = FIXTURE_TYPES.includes(meta.formatKey as 'lk' | 'custom') ? [...FIXTURE_TYPES] : [meta.formatKey, ...FIXTURE_TYPES];
   const ties: Tie[] = cricket ? ['NRR', 'HEAD TO HEAD', 'WINS'] : ['DIFFERENCE', 'HEAD TO HEAD', 'WINS'];
@@ -57,7 +57,7 @@ export function EditTournament({ id, name, visibility, meta, cricket, venues: al
     setBusy(true); setError(null);
     try {
       const r = await updateTournament({
-        tournamentId: id, name: f.name, visibility: f.visibility, startDate: f.startDate, endDate: f.endDate, venueIds: f.venueIds, formatKey: f.formatKey, ...(cricket ? { overs: f.overs } : {}),
+        tournamentId: id, name: f.name, visibility: f.visibility, startDate: f.startDate, endDate: f.endDate, venueIds: f.venueIds, formatKey: f.formatKey, ...(cricket ? { overs: f.overs } : {}), ...(foosball ? { rules: f.rules } : {}),
         points: f.points, qualify: f.qualify, ...(table && wantPerTeam ? { matchesPerTeam: wantPerTeam } : {}), tiebreak: f.tiebreak, schedule: { perDay: f.perDay, firstMatchTime: f.firstMatchTime, restDay: f.restDay }, tzOffset: new Date().getTimezoneOffset(),
       });
       if (r.error) { setError(r.error); return; }
@@ -74,7 +74,7 @@ export function EditTournament({ id, name, visibility, meta, cricket, venues: al
         <div className="tm-modal" onClick={() => setOpen(false)}>
           <form className="tm-dialog" role="dialog" aria-label="Edit tournament" style={{ maxWidth: 600, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(); }}>
             <h2>Edit tournament</h2>
-            {started && <p>The tournament has started, so the fixture type, how many play on, the matches per team, the overs and the daily schedule are locked. Everything else can still change.</p>}
+            {started && <p>The tournament has started, so the fixture type, how many play on, the matches per team, the overs or match rules and the daily schedule are locked. Everything else can still change.</p>}
 
             <label><span className="lbl">NAME</span><input value={f.name} maxLength={80} onChange={(e) => set('name', e.target.value)} /></label>
             <div style={box}>
@@ -139,6 +139,15 @@ export function EditTournament({ id, name, visibility, meta, cricket, venues: al
               <span className="lbl">TIEBREAK</span>
               <div style={row}>{ties.map((t) => <button key={t} type="button" aria-pressed={f.tiebreak === t} className="tm-btn" style={pill(f.tiebreak === t)} onClick={() => set('tiebreak', t)}>{t}</button>)}</div>
             </div>
+
+            {foosball && (
+              <div style={box}>
+                <span className="lbl">MATCH RULES{started ? '' : fixtureCount > 0 ? ' · UPDATES THE SCHEDULED MATCHES' : ''}</span>
+                <div style={row}>{BEST_OF_OPTIONS.map((v) => <button key={v} type="button" aria-pressed={f.rules.bestOf === v} disabled={started} className="tm-btn" style={pill(f.rules.bestOf === v, started)} onClick={() => set('rules', { ...f.rules, bestOf: v })}>{v === 1 ? 'SINGLE GAME' : `BEST OF ${v}`}</button>)}</div>
+                <div style={row}>{FIRST_TO_OPTIONS.map((v) => <button key={v} type="button" aria-pressed={f.rules.firstTo === v} disabled={started} className="tm-btn" style={pill(f.rules.firstTo === v, started)} onClick={() => set('rules', { ...f.rules, firstTo: v })}>{v} GOALS</button>)}</div>
+                <div style={row}>{([[1, 'FIRST TO THE TARGET'], [2, 'MUST WIN BY 2']] as const).map(([v, l]) => <button key={v} type="button" aria-pressed={f.rules.winBy === v} disabled={started} className="tm-btn" style={pill(f.rules.winBy === v, started)} onClick={() => set('rules', { ...f.rules, winBy: v })}>{l}</button>)}</div>
+              </div>
+            )}
 
             {cricket && (
               <label><span className="lbl">OVERS PER MATCH{started ? '' : fixtureCount > 0 ? (table ? ' · FIXTURES ARE MADE AGAIN' : ' · UPDATES THE SCHEDULED MATCHES') : ''}</span><input type="number" min={1} max={50} disabled={started} value={f.overs} onChange={(e) => set('overs', Math.max(1, Math.min(50, Math.trunc(Number(e.target.value) || 1))))} /></label>

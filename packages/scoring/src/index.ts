@@ -28,6 +28,7 @@ import { fitMatchesPerTeam } from '@sports/shared';
 import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
 import { isMatchRef, slotKey, slotLabel } from '@sports/sports-engine/src/fixture-import';
 import { computeCricketBoards, type Board, type BoardRow, type LeaderMatch } from '@sports/sports-engine/src/leaders';
+import { foosballRules, totalGoals, type FoosballState } from '@sports/sports-engine/src/foosball';
 import { computeStandings, type FinishedMatch, type Standing } from '@sports/sports-engine/src/standings';
 import { projectKnockout, projectLeagueKnockout, toInstant, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
 import {
@@ -563,7 +564,7 @@ export interface PendingFixture {
 }
 
 /** Sports whose matches can be created and scored. Others keep their imported fixtures as a schedule only. */
-const SCORED_SPORTS = new Set(['cricket']);
+const SCORED_SPORTS = new Set(['cricket', 'foosball']);
 
 const slotText = (s: FixtureSlot) => slotLabel(s);
 
@@ -576,12 +577,15 @@ function toFinished(rows: { match: { teamAId: string; teamBId: string; result: u
     const result = match.result as { winnerTeamId?: string; text?: string } | null;
     const winner = result?.winnerTeamId ?? null;
     const cs = state as CricketState | null;
+    const fs = state as FoosballState | null;
+    const tg = fs?.kind === 'foosball' ? totalGoals(fs) : null;
     return {
       teamAId: match.teamAId,
       teamBId: match.teamBId,
       winnerTeamId: winner,
       outcome: winner ? 'win' : /tie/i.test(String(result?.text ?? '')) ? 'tie' : 'no_result',
       stats: cs?.kind === 'cricket' ? (matchTeamStats(cs) ?? undefined) : undefined,
+      goals: tg && fs ? { [fs.teams[0]!.id]: { for: tg.a, against: tg.b }, [fs.teams[1]!.id]: { for: tg.b, against: tg.a } } : undefined,
     };
   });
 }
@@ -661,7 +665,9 @@ export async function advanceBracket(tournamentId: string): Promise<number> {
       .insert(matches)
       .values({
         sportId: row.sportId, tournamentId, teamAId: a, teamBId: b, venue: f.venue, scheduledAt: toInstant(f.date, f.time, f.tz),
-        config: { overs, ballsPerOver: 6, powerplayOvers: Math.min(6, overs), playersPerSide: 11, maxOversPerBowler: Math.ceil(overs / 5), freeHit: true, wideReball: true, superOver: true, dls: false },
+        config: row.sportKey === 'foosball'
+          ? { ...foosballRules(meta.rules) }
+          : { overs, ballsPerOver: 6, powerplayOvers: Math.min(6, overs), playersPerSide: 11, maxOversPerBowler: Math.ceil(overs / 5), freeHit: true, wideReball: true, superOver: true, dls: false },
         visibility: 'public', meta: { ...(f.round ? { round: f.round } : {}), ...(f.group ? { group: f.group } : {}), fixtureNo: f.no, source: meta.formatKey === 'lk' ? 'table' : 'fixture-import' },
       })
       .onConflictDoNothing()

@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { and, eq, getDb, inArray, matchLineups, matches, players, sports, teamMembers, teams, tournaments, users, venues } from '@sports/db';
-import { FORMATS, fitMatchesPerTeam, matchInputSchema, tournamentInputSchema, type TournamentMeta } from '@sports/shared';
+import { FOOSBALL_DEFAULTS, FORMATS, fitMatchesPerTeam, matchInputSchema, tournamentInputSchema, type TournamentMeta } from '@sports/shared';
 import { rebuildFixtures } from '@sports/scoring';
 import { planTournament, toInstant } from '@sports/sports-engine/src/tournament-plan';
 import { audit, requireRole } from '@/lib/guard';
@@ -64,6 +64,7 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
     version: 1,
     formatKey: v.formatKey,
     ...(sport.key === 'cricket' && v.overs ? { overs: v.overs } : {}),
+    ...(sport.key === 'foosball' ? { rules: v.rules ?? { ...FOOSBALL_DEFAULTS } } : {}),
     venues: v.venueIds.map((id) => ({ id, name: venueById.get(id)!.name })),
     points: v.points,
     qualify: v.qualify,

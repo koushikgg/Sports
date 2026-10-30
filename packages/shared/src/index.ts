@@ -131,6 +131,18 @@ export const minTeamsFor = (formatKey: FormatKey, qualify?: 2 | 4) => (formatKey
 
 export const TIEBREAKS = ['NRR', 'DIFFERENCE', 'HEAD TO HEAD', 'WINS'] as const;
 
+/** Foosball rules: a match is best of N games, a game is first to N goals, and may need a two-goal lead. */
+export const FIRST_TO_OPTIONS = [5, 7, 10] as const;
+export const BEST_OF_OPTIONS = [1, 3, 5] as const;
+export const WIN_BY_OPTIONS = [1, 2] as const;
+export const FOOSBALL_DEFAULTS = { firstTo: 10, bestOf: 3, winBy: 1 } as const;
+export const foosballRulesSchema = z.object({
+  firstTo: z.number().int().min(1).max(50),
+  bestOf: z.union([z.literal(1), z.literal(3), z.literal(5)]),
+  winBy: z.union([z.literal(1), z.literal(2)]),
+});
+export type FoosballRules = z.infer<typeof foosballRulesSchema>;
+
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date');
 const time = z.string().regex(/^\d{2}:\d{2}$/, 'Use a time');
 const uuid = z.string().uuid();
@@ -147,6 +159,8 @@ export const tournamentInputSchema = z
     formatKey: z.enum(FORMAT_KEYS),
     /** Cricket only. */
     overs: z.number().int().min(1).max(50).optional(),
+    /** Foosball only. */
+    rules: foosballRulesSchema.optional(),
     points: z.object({
       win: z.number().int().min(0).max(5),
       tie: z.number().int().min(0).max(5),
@@ -177,6 +191,7 @@ export const tournamentEditSchema = z
     venueIds: z.array(uuid).max(50).default([]),
     formatKey: z.enum(FORMAT_KEYS),
     overs: z.number().int().min(1).max(50).optional(),
+    rules: foosballRulesSchema.optional(),
     points: z.object({
       win: z.number().int().min(0).max(5),
       tie: z.number().int().min(0).max(5),
@@ -219,6 +234,8 @@ export interface TournamentMeta {
   version: 1;
   formatKey: FormatKey;
   overs?: number;
+  /** Foosball: how a game and a match are decided. */
+  rules?: FoosballRules;
   venues: { id: string; name: string }[];
   points: { win: number; tie: number; noResult: number };
   qualify: 2 | 4;
