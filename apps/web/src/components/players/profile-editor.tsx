@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { saveProfile } from '@/app/profile/actions';
 import { Avatar } from '@/components/ratch/avatar';
 import { toast } from '@/components/ratch/toast';
+import { PICKABLE_ROLES, roleLabel } from '@/lib/player-role';
 
 /** Centre-crops to a square and shrinks to 256px, so the photo stored is a few tens of KB. */
 async function toSquare(file: File, size = 256): Promise<string> {
@@ -15,16 +16,17 @@ async function toSquare(file: File, size = 256): Promise<string> {
   return c.toDataURL('image/jpeg', 0.85);
 }
 
-export function ProfileEditor({ name, email, role, avatar }: { name: string; email: string; role: string; avatar: string | null }) {
+export function ProfileEditor({ name, email, role, avatar, cricketRole }: { name: string; email: string; role: string; avatar: string | null; cricketRole: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState(name);
   const [photo, setPhoto] = useState<string | null>(null); // a new, unsaved photo
   const [removed, setRemoved] = useState(false);
+  const [playRole, setPlayRole] = useState(cricketRole ?? '');
   const file = useRef<HTMLInputElement>(null);
 
   const shown = removed ? null : (photo ?? avatar);
-  const dirty = draft.trim() !== name || !!photo || removed;
+  const dirty = draft.trim() !== name || !!photo || removed || playRole !== (cricketRole ?? '');
 
   const pick = async (f: File | undefined) => {
     if (!f) return;
@@ -37,6 +39,7 @@ export function ProfileEditor({ name, email, role, avatar }: { name: string; ema
     const fd = new FormData();
     fd.set('name', draft);
     fd.set('avatar', photo ?? (removed ? 'remove' : ''));
+    fd.set('cricketRole', playRole);
     start(async () => {
       const r = await saveProfile(fd);
       if (r.error) return toast.error(r.error);
@@ -59,6 +62,15 @@ export function ProfileEditor({ name, email, role, avatar }: { name: string; ema
         <span className="lbl">MY PROFILE · {role.toUpperCase()}</span>
         <label className="pf-field"><span className="lbl">NAME</span><input value={draft} maxLength={60} onChange={(e) => setDraft(e.target.value)} /></label>
         <label className="pf-field"><span className="lbl">EMAIL</span><input value={email} readOnly tabIndex={-1} /></label>
+        <div className="pf-field" role="group" aria-label="Cricket role">
+          <span className="lbl">CRICKET ROLE</span>
+          <div className="pf-roles">
+            {PICKABLE_ROLES.map(([v, l]) => (
+              <button key={v} type="button" aria-pressed={playRole === v} data-on={playRole === v ? 'true' : undefined} onClick={() => setPlayRole(playRole === v ? '' : v)}>{l}</button>
+            ))}
+          </div>
+          {playRole === 'WK' && <small className="pf-hint">An organiser marked you as {roleLabel('WK')?.toLowerCase()}. Pick a role above to change it.</small>}
+        </div>
         <div className="pf-acts">
           <button type="submit" className="pf-save" disabled={!dirty || !draft.trim() || pending}>{pending ? 'SAVING…' : 'SAVE'}</button>
         </div>

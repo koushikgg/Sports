@@ -34,13 +34,14 @@ import {
   projected,
   strikeRate,
   surnameOf,
+  target as targetOf,
 } from '@sports/sports-engine/src/cricket-view';
 import { Chip } from '@/components/ratch/chip';
 import { toast, Toaster } from '@/components/ratch/toast';
 import { useScorer } from '@/lib/use-live-match';
 import { ScorerCard } from './scorer-card';
 
-type Sheet = 'extras' | '57' | 'wicket' | 'retire' | 'result' | 'toss' | 'openers';
+type Sheet = 'extras' | '57' | 'wicket' | 'retire' | 'result' | 'toss' | 'openers' | 'revise';
 type Active = Sheet | 'batter' | 'bowler' | 'final';
 type Credit = 'bat' | 'b' | 'lb';
 type Delivery = 'normal' | 'wd' | 'nb';
@@ -150,6 +151,8 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   const [toss, setToss] = useState<{ win: string; choice: 'bat' | 'bowl' }>({ win: s.teams[0]!.id, choice: 'bat' });
   const [open, setOpen] = useState<{ striker: string; non: string; bowler: string; step: 'striker' | 'non' | 'bowler' }>({ striker: '', non: '', bowler: '', step: 'striker' });
   const [res, setRes] = useState<string>('tie');
+  const [margin, setMargin] = useState('');
+  const [rv, setRv] = useState<{ overs: string; target: string }>({ overs: '', target: '' });
 
   useEffect(() => { if (s.awaiting !== 'complete') setAckFinal(false); }, [s.awaiting]);
   useEffect(() => { setOpen({ striker: '', non: '', bowler: '', step: 'striker' }); }, [s.innings.length]);
@@ -203,6 +206,14 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   };
 
   const openSheet = (kind: Sheet, preset?: () => void) => { preset?.(); setSheet(kind); setDrawer(false); };
+  const openEnd = () => openSheet('result', () => { setRes('tie'); setMargin(''); });
+  const openRevise = () => openSheet('revise', () => setRv({ overs: String(Math.max(1, s.overs - 1)), target: '' }));
+  // reducing the overs: shorter than now, and not shorter than what the current innings has already bowled
+  const reviseMin = inn && !inn.closed ? Math.max(1, Math.ceil(inn.legalBalls / 6)) : 1;
+  const reviseOvers = Number(rv.overs);
+  const reviseTarget = rv.target.trim() ? Number(rv.target) : null;
+  const reviseOk = Number.isInteger(reviseOvers) && reviseOvers >= reviseMin && reviseOvers < s.overs && (reviseTarget === null || (Number.isInteger(reviseTarget) && reviseTarget >= 1 && reviseTarget <= 999));
+  const canRevise = s.innings.length > 0 && !s.result && s.overs > 1 && connected && !busy;
   const openExtras = (type: Extra) => openSheet('extras', () => setEx({ type, runs: type === 'b' || type === 'lb' ? 1 : 0, nbKind: 'bat' }));
   const openWicket = () => openSheet('wicket', () => setWk({ delivery: 'normal', kind: 'bowled', who: 0, runs: 0, fielder: '' }));
 
@@ -251,7 +262,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   const statusLine = (() => {
     if (!inn) return snapshot.summary.status;
     if (s.result) return s.result.text;
-    if (inn.closed) return `Innings break · ${teamName(otherTeam(s, inn.battingTeamId))} need ${inn.runs + 1} to win`;
+    if (inn.closed) return `Innings break · ${teamName(otherTeam(s, inn.battingTeamId))} need ${targetOf(s)} to win`;
     if (ch) return ch.need > 0 ? `Need ${ch.need} run${ch.need === 1 ? '' : 's'} from ${ch.left} ball${ch.left === 1 ? '' : 's'}` : 'Target reached';
     return inn.legalBalls ? `Projected ${projected(inn, s.overs)} at ${crr.toFixed(0)} an over` : 'Innings in progress';
   })();
@@ -322,6 +333,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
     wicket: { kicker: 'WICKET', title: 'How was the batter out?', w: 600, primary: 'RECORD WICKET', variant: 'danger', secondary: 'CANCEL', closable: true },
     retire: { kicker: 'RETIRE', title: 'Retire a batter', w: 520, primary: 'CONFIRM', secondary: 'CANCEL', closable: true },
     result: { kicker: 'END OF MATCH', title: 'End the match', w: 560, primary: 'PUBLISH RESULT', secondary: 'BACK TO SCORING', closable: true },
+    revise: { kicker: 'RAIN OR BAD LIGHT', title: 'Reduce the overs', w: 520, primary: 'REDUCE OVERS', secondary: 'CANCEL', closable: true },
     toss: sheet === 'toss'
       ? { kicker: 'CORRECT THE TOSS', title: 'Edit toss', w: 560, primary: 'SAVE TOSS', secondary: 'CANCEL', closable: true }
       : { kicker: 'BEFORE THE MATCH', title: 'Toss', w: 560, primary: 'CONTINUE', secondary: 'CANCEL', closable: false },
@@ -346,8 +358,13 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
       case 'toss': return void run('toss', { winnerTeamId: toss.win, decision: toss.choice }, sheet === 'toss' ? 'Toss corrected' : 'Toss recorded');
       case 'openers': return void run('start_innings', { strikerId: pickS, nonStrikerId: pickN, bowlerId: openBowler }, 'Innings started');
       case 'result': {
-        const body = res === 'tie' ? { outcome: 'tie' } : res === 'nr' ? { outcome: 'no_result' } : { outcome: 'win', winnerTeamId: res.replace('win:', '') };
+        const body = res === 'tie' ? { outcome: 'tie' } : res === 'nr' ? { outcome: 'no_result' } : { outcome: 'win', winnerTeamId: res.split(':')[1], ...(res.startsWith('dls:') ? { method: 'dls' } : {}), ...(margin.trim() ? { margin: margin.trim() } : {}) };
         return void run('finish', body, 'Result published to live view');
+      }
+      case 'revise': {
+        const overs = Number(rv.overs);
+        const target = rv.target.trim() ? Number(rv.target) : undefined;
+        return void run('revise_overs', { overs, ...(target ? { target } : {}) }, `Match reduced to ${overs} overs`);
       }
       case 'final': return setAckFinal(true);
     }
@@ -409,7 +426,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                   <span className="lbl">INNINGS {s.innings.length} COMPLETE</span>
                   <b>{teamName(inn.battingTeamId)} {inn.runs}/{inn.wickets} ({formatOvers(inn.legalBalls)})</b>
                   <small>
-                    {nextBat && s.innings.length === 1 ? `${teamName(nextBat)} need ${inn.runs + 1} to win. ` : ''}
+                    {nextBat && s.innings.length === 1 ? `${teamName(nextBat)} need ${targetOf(s)} to win. ` : ''}
                     Scoring is paused. If the last ball was a mistake, undo it first.
                   </small>
                 </div>
@@ -553,6 +570,8 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
             </button>
             <div className="sc-pills">
               <button className="sc-pill" disabled={!canScore} onClick={swap}>SWAP STRIKE · S</button>
+              <button className="sc-pill" disabled={!canRevise} onClick={openRevise}>REDUCE OVERS</button>
+              <button className="sc-pill" data-tone="danger" disabled={!s.toss || !!s.result} onClick={openEnd}>END MATCH</button>
               <button className="sc-pill" data-solid="card" onClick={() => setDrawer(true)}>MORE ACTIONS</button>
             </div>
             <div className="sc-kbd">
@@ -827,14 +846,38 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
             <>
               <div className="sc-opts" data-cols="2">
                 {s.teams.map((t) => <Opt key={t.id} selected={res === `win:${t.id}`} onClick={() => setRes(`win:${t.id}`)}>{t.name} won</Opt>)}
+                {s.innings.length >= 2 && s.teams.map((t) => <Opt key={`d${t.id}`} selected={res === `dls:${t.id}`} onClick={() => setRes(`dls:${t.id}`)}>{t.name} won · DLS</Opt>)}
                 <Opt selected={res === 'tie'} onClick={() => setRes('tie')}>TIE</Opt>
                 <Opt selected={res === 'nr'} onClick={() => setRes('nr')}>NO RESULT</Opt>
               </div>
+              {(res.startsWith('win:') || res.startsWith('dls:')) && (
+                <label className="sc-field">
+                  <span className="lbl lbl-sm">MARGIN (OPTIONAL)</span>
+                  <input value={margin} maxLength={60} placeholder="e.g. 12 runs or 4 wickets" onChange={(e) => setMargin(e.target.value)} />
+                </label>
+              )}
               <div className="sc-result">
-                <h3>{res === 'tie' ? 'Match tied' : res === 'nr' ? 'No result' : `${teamName(res.replace('win:', ''))} won`}</h3>
+                <h3>{res === 'tie' ? 'Match tied' : res === 'nr' ? 'No result' : `${teamName(res.split(':')[1] ?? '')} won${margin.trim() ? ` by ${margin.trim().replace(/^by\s+/i, '')}` : ''}${res.startsWith('dls:') ? ' (DLS method)' : ''}`}</h3>
                 {resultSummary.map((r) => <p key={r.team}><span>{r.team}</span><b>{r.score}</b></p>)}
               </div>
               <div className="sc-note">Publishing locks scoring and updates the live view for every viewer. You can still undo it.</div>
+            </>
+          )}
+
+          {shown === 'revise' && (
+            <>
+              <div className="sc-note">The match is {s.overs} overs now. Innings already played keep the overs they were played under; the innings in progress and any still to come use the new number.</div>
+              <label className="sc-field">
+                <span className="lbl lbl-sm">NEW OVERS PER SIDE · {reviseMin} TO {s.overs - 1}</span>
+                <input type="number" inputMode="numeric" min={reviseMin} max={s.overs - 1} step={1} value={rv.overs} onChange={(e) => setRv({ ...rv, overs: e.target.value })} />
+              </label>
+              {s.innings[0]?.closed && (
+                <label className="sc-field">
+                  <span className="lbl lbl-sm">REVISED TARGET (OPTIONAL)</span>
+                  <input type="number" inputMode="numeric" min={1} step={1} value={rv.target} placeholder={`Now ${targetOf(s)}. Leave empty to keep it`} onChange={(e) => setRv({ ...rv, target: e.target.value })} />
+                </label>
+              )}
+              {s.innings[0]?.closed && <div className="sc-note">The target is the runs the chasing side needs to win, from the DLS table or your own calculation. A chase that ends short of it loses by the gap.</div>}
             </>
           )}
 
@@ -861,7 +904,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                 <Btn variant="gray" onClick={secondary} disabled={(shown === 'batter' || shown === 'bowler' || shown === 'final') && !canUndo}>{m.secondary}</Btn>
               )}
               {showPrimary && (
-                <Btn variant={m.variant ?? 'primary'} onClick={primary} disabled={busy || (!connected && shown !== 'final') || (shown === 'openers' && !openersReady)}>{m.primary!}</Btn>
+                <Btn variant={m.variant ?? 'primary'} onClick={primary} disabled={busy || (!connected && shown !== 'final') || (shown === 'openers' && !openersReady) || (shown === 'revise' && !reviseOk)}>{m.primary!}</Btn>
               )}
             </div>
           )}
@@ -880,7 +923,8 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
           { l: 'Retire batter', d: 'Hurt or retired out', fn: () => openSheet('retire', () => setRt({ who: 0, type: 'hurt' })), off: !canScore },
           { l: 'Penalty runs', d: 'Award 5 to the batting side', fn: () => void run('penalty', { runs: 5 }, '5 penalty runs awarded'), off: !(inn && !inn.closed && connected && !busy) },
           { l: 'End innings', d: 'Declare or close the innings now', fn: () => { if (confirm('End this innings now?')) void run('end_innings', {}, 'Innings ended'); }, off: !(inn && !inn.closed && connected && !busy) },
-          { l: 'End match', d: 'Confirm and publish the result', fn: () => openSheet('result', () => setRes('tie')), off: !s.toss || !!s.result, danger: true },
+          { l: 'Reduce overs', d: 'Shorten the match (rain, bad light), either innings', fn: openRevise, off: !canRevise },
+          { l: 'End match', d: 'Win, DLS win, tie or no result', fn: openEnd, off: !s.toss || !!s.result, danger: true },
           { l: 'Release scorer lock', d: 'Let another scorer take over', fn: () => { release(); setDrawer(false); flash('Scorer lock released'); }, off: false },
         ]).map((d) => (
           <button key={d.l} className="sc-drawer-item" data-danger={d.danger ? 'true' : undefined} disabled={d.off} style={d.off ? { opacity: 0.45 } : undefined} tabIndex={drawer ? 0 : -1} onClick={d.fn}>

@@ -1,4 +1,4 @@
-import { BALLS_PER_OVER, formatOvers, type BatterStat, type BowlerStat, type Chip, type CricketState, type Innings, type LogItem } from './cricket';
+import { BALLS_PER_OVER, formatOvers, inningsOvers, targetRuns, type BatterStat, type BowlerStat, type Chip, type CricketState, type Innings, type LogItem } from './cricket';
 
 /** Pure helpers behind the scorer UI. No React, no I/O, so they can be tested. */
 
@@ -91,7 +91,7 @@ export function lastOutLine(s: CricketState, names: Names): string {
   return `${nameOf(names, id)} ${how}. ${b.runs} (${b.balls}).`;
 }
 
-export const target = (s: CricketState) => (s.innings[0] ? s.innings[0].runs + 1 : 0);
+export const target = (s: CricketState) => targetRuns(s);
 
 export function chase(s: CricketState, inn: Innings) {
   if (s.innings.length !== 2) return null;
@@ -134,11 +134,10 @@ export function overSummaries(inn: Innings, totalOvers: number): OverSummary[] {
  */
 export function matchTeamStats(s: CricketState): Record<string, { runsFor: number; ballsFaced: number; runsAgainst: number; ballsBowled: number }> | null {
   if (s.innings.length < 2) return null;
-  const quota = s.overs * BALLS_PER_OVER;
   const out: Record<string, { runsFor: number; ballsFaced: number; runsAgainst: number; ballsBowled: number }> = {};
   const get = (id: string) => (out[id] ??= { runsFor: 0, ballsFaced: 0, runsAgainst: 0, ballsBowled: 0 });
   for (const inn of s.innings) {
-    const faced = inn.closeReason === 'all_out' ? quota : inn.legalBalls;
+    const faced = inn.closeReason === 'all_out' ? inningsOvers(s, inn) * BALLS_PER_OVER : inn.legalBalls;
     const bat = get(inn.battingTeamId), bowl = get(inn.bowlingTeamId);
     bat.runsFor += inn.runs; bat.ballsFaced += faced;
     bowl.runsAgainst += inn.runs; bowl.ballsBowled += faced;

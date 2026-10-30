@@ -1,4 +1,4 @@
-import { currentInnings, formatOvers, runRate, type CricketState } from '@sports/sports-engine/src/cricket';
+import { currentInnings, formatOvers, runRate, targetRuns, type CricketState } from '@sports/sports-engine/src/cricket';
 import { nameOf, type Names } from '@sports/sports-engine/src/cricket-view';
 import { Chip } from '@/components/ratch/chip';
 
@@ -9,7 +9,7 @@ export function CricketTv({ state, names, status }: { state: CricketState; names
 
   const team = state.teams.find((t) => t.id === inn.battingTeamId)!;
   const chasing = state.innings.length === 2 && !state.result;
-  const target = state.innings[0]!.runs + 1;
+  const target = targetRuns(state);
   const bowler = inn.bowler ? inn.bowlers[inn.bowler] : null;
   const live = !inn.closed && !state.result;
 

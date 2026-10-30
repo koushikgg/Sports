@@ -1,3 +1,4 @@
+import { roleLabel } from '@/lib/player-role';
 import { matchHref } from '@/lib/match-href';
 import Link from 'next/link';
 import { Avatar } from '@/components/ratch/avatar';
@@ -25,7 +26,7 @@ export function PlayerView({ profile, sport, basePath, identity }: { profile: Pl
           <div className="pf-id">
             <Avatar name={profile.name} size={96} src={profile.avatar} />
             <div className="pf-who">
-              <span className="lbl">PLAYER{profile.role ? ` · ${profile.role}` : ''}</span>
+              <span className="lbl">PLAYER{profile.role ? ` · ${(roleLabel(profile.role) ?? profile.role).toUpperCase()}` : ''}</span>
               <h1>{profile.name}</h1>
               {profile.teams.length > 0 && (
                 <div className="pf-chips">

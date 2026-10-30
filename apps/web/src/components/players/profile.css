@@ -61,3 +61,9 @@ a.pf-chip:hover { filter: brightness(1.2); }
   .pf-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; }
   .pf-date, .pf-score { display: none; }
 }
+
+.pf-roles { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-roles button { height: 40px; padding: 0 18px; border-radius: 999px; background: var(--surface-muted); color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; transition: background 150ms, color 150ms; }
+.pf-roles button:hover { color: #fff; }
+.pf-roles button[data-on='true'] { background: var(--amber); color: #0d0e11; }
+.pf-hint { color: var(--text-tertiary); font-size: 12px; }

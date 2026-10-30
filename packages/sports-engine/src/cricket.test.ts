@@ -481,3 +481,71 @@ describe('correcting the toss', () => {
     expect(state.lastAction?.type).toBe('toss');
   });
 });
+
+describe('reducing the overs during the match', () => {
+  const second = [ev('start_innings', { strikerId: 'b1', nonStrikerId: 'b2', bowlerId: 'a1' })];
+
+  it('shortens the first innings and closes it at the new limit', () => {
+    const { state } = play([...setup, ball(1), ball(1), ev('revise_overs', { overs: 1 }), ball(1), ball(1), ball(1), ball(1)]);
+    expect(state.overs).toBe(1);
+    const first = state.innings[0]!;
+    expect(first.closed).toBe(true);
+    expect(first.closeReason).toBe('overs');
+    expect(first.legalBalls).toBe(6);
+    expect(state.lastAction?.type).toBe('ball');
+  });
+  it('only reduces, never below what is already bowled, and only once the match has begun', () => {
+    expect(reject(setup, ev('revise_overs', { overs: 2 }))).toMatch(/only be reduced/);
+    const eightBalls = [...setup, ...Array(6).fill(ball(0)), ev('new_bowler', { playerId: 'b2' }), ball(0), ball(0)];
+    expect(reject(eightBalls, ev('revise_overs', { overs: 1 }))).toMatch(/already bowled/);
+    expect(reject([ev('toss', { winnerTeamId: 'A', decision: 'bat' })], ev('revise_overs', { overs: 1 }))).toMatch(/not started/);
+  });
+  it('a target can only be set after the first innings', () => {
+    expect(reject([...setup, ball(1)], ev('revise_overs', { overs: 1, target: 5 }))).toMatch(/first innings is over/);
+  });
+  it('keeps the first innings at the overs it was played under and chases a revised target', () => {
+    const { state } = play([...setup, ball(4), ball(4), ev('end_innings'), ...second, ev('revise_overs', { overs: 1, target: 5 }), ball(4), ball(1)]);
+    expect(state.innings[0]!.overs).toBe(2);
+    expect(state.overs).toBe(1);
+    expect(state.revisedTarget).toBe(5);
+    expect(state.result?.winnerTeamId).toBe('B');
+    expect(state.result?.text).toBe('Beta won by 3 wickets (DLS method)');
+  });
+  it('a chase that falls short of the revised target loses by the revised margin', () => {
+    const { state } = play([...setup, ball(4), ball(4), ev('end_innings'), ...second, ev('revise_overs', { overs: 1, target: 10 }), ...Array(6).fill(ball(0))]);
+    expect(state.innings[1]!.closeReason).toBe('overs');
+    expect(state.result?.winnerTeamId).toBe('A');
+    expect(state.result?.text).toBe('Alpha won by 9 runs (DLS method)');
+  });
+  it('the chase ends at once if the new target is already reached', () => {
+    const { state } = play([...setup, ball(4), ball(4), ev('end_innings'), ...second, ball(4), ball(1), ev('revise_overs', { overs: 1, target: 5 })]);
+    expect(state.innings[1]!.closeReason).toBe('target');
+    expect(state.result?.winnerTeamId).toBe('B');
+  });
+  it('can be undone', () => {
+    const { log } = play([...setup, ball(1), ev('revise_overs', { overs: 1 })]);
+    const d = decide(engine, ctx, log, { type: 'undo', payload: {} });
+    expect(d.ok && (d.value.state as CricketState).overs).toBe(2);
+  });
+  it('reduces the bowler cap with the overs', () => {
+    const c2 = { ...ctx, config: { overs: 10, maxOversPerBowler: 2 } };
+    let log: LoggedEvent[] = [];
+    for (const e of [...setup, ball(1), ev('revise_overs', { overs: 5 })]) {
+      const d = decide(engine, c2, log, e);
+      if (!d.ok) throw new Error(d.error);
+      log = [...log, { seq: log.length + 1, ...d.value.event }];
+    }
+    expect((replay(engine, c2, log) as CricketState).maxOversPerBowler).toBe(1);
+  });
+});
+
+describe('ending the match by hand', () => {
+  it('records a DLS win with its margin, and plain results', () => {
+    const base = [...setup, ball(1), ev('end_innings'), ev('start_innings', { strikerId: 'b1', nonStrikerId: 'b2', bowlerId: 'a1' }), ball(0)];
+    expect(play([...base, ev('finish', { outcome: 'win', winnerTeamId: 'B', method: 'dls', margin: 'by 12 runs' })]).state.result).toEqual({ winnerTeamId: 'B', text: 'Beta won by 12 runs (DLS method)' });
+    expect(play([...base, ev('finish', { outcome: 'win', winnerTeamId: 'A', method: 'dls' })]).state.result?.text).toBe('Alpha won (DLS method)');
+    expect(play([...base, ev('finish', { outcome: 'win', winnerTeamId: 'A', margin: '4 wickets' })]).state.result?.text).toBe('Alpha won by 4 wickets');
+    expect(play([...base, ev('finish', { outcome: 'no_result' })]).state.result).toEqual({ winnerTeamId: null, text: 'No result' });
+    expect(reject(base, ev('finish', { outcome: 'tie', method: 'dls' }))).toMatch(/only applies to a win/);
+  });
+});

@@ -68,6 +68,8 @@ export interface Innings {
   fow: { runs: number; wickets: number; playerId: string; over: string }[];
   partnership: { runs: number; balls: number };
   closed: boolean;
+  /** Overs this innings is limited to, when they were reduced after an earlier innings was played. Otherwise the match's `overs`. */
+  overs?: number;
   closeReason?: 'all_out' | 'overs' | 'target' | 'declared';
 }
 
@@ -89,6 +91,8 @@ export interface CricketState {
   innings: Innings[];
   awaiting: Awaiting;
   result: CricketResult | null;
+  /** A target set by hand for the chase (rain, DLS). Missing or null means first innings runs + 1. */
+  revisedTarget?: number | null;
   /** Match rules that change what the engine accepts. */
   rules: { freeHit: boolean };
   /** The next delivery is a free hit (the previous legal-or-not delivery was a no-ball). */
@@ -113,6 +117,12 @@ export const ballLabel = (legalBalls: number) =>
     : `${Math.floor((legalBalls - 1) / BALLS_PER_OVER)}.${((legalBalls - 1) % BALLS_PER_OVER) + 1}`;
 
 export const currentInnings = (s: CricketState): Innings | undefined => s.innings.at(-1);
+
+/** Overs an innings is limited to. Reducing the overs does not rewrite an innings that was already played. */
+export const inningsOvers = (s: CricketState, inn: Innings) => inn.overs ?? s.overs;
+
+/** Runs the chasing side needs to win (not to tie): a target set by hand, otherwise the first innings total plus one. */
+export const targetRuns = (s: CricketState) => s.revisedTarget ?? (s.innings[0] ? s.innings[0].runs + 1 : 0);
 
 export function maxWicketsFor(s: CricketState, teamId: string): number {
   const squad = s.squads[teamId]?.length ?? 0;
@@ -173,7 +183,16 @@ const schemas = {
   retire: z.object({ playerId: id, kind: z.enum(['retired_hurt', 'retired_out']) }),
   penalty: z.object({ runs: z.number().int().min(1).max(10) }),
   end_innings: z.object({}),
-  finish: z.object({ outcome: z.enum(['tie', 'no_result', 'win']), winnerTeamId: id.optional() }),
+  finish: z.object({
+    outcome: z.enum(['tie', 'no_result', 'win']),
+    winnerTeamId: id.optional(),
+    /** How a win was decided when it was not a plain win by runs or wickets. */
+    method: z.enum(['dls']).optional(),
+    /** The margin as the scorer writes it, e.g. "12 runs" or "4 wickets". */
+    margin: z.string().trim().max(60).optional(),
+  }),
+  /** Reduce the overs after the match has begun (rain, bad light). Optionally the target for the chase. */
+  revise_overs: z.object({ overs: z.number().int().min(1).max(50), target: z.number().int().min(1).max(999).optional() }),
 } as const;
 
 type EventType = keyof typeof schemas;
@@ -191,6 +210,7 @@ function initialState(ctx: MatchContext): CricketState {
   const state: CricketState = {
     kind: 'cricket',
     overs: Number(cfg.overs ?? 5),
+    revisedTarget: null,
     maxOversPerBowler: cfg.maxOversPerBowler ? Number(cfg.maxOversPerBowler) : null,
     maxWicketsCfg: cfg.maxWickets ? Number(cfg.maxWickets) : null,
     teams: ctx.teams,
@@ -297,10 +317,20 @@ function validate(s: CricketState, event: SportEvent): Result {
     case 'end_innings':
       return live ? OK : fail('No innings in progress');
 
+    case 'revise_overs': {
+      if (!s.toss || s.innings.length === 0) return fail('The match has not started');
+      if (s.result) return fail('Match already finished');
+      if (p.overs >= s.overs) return fail(`Overs can only be reduced (now ${s.overs})`);
+      if (inn && !inn.closed && p.overs * BALLS_PER_OVER < inn.legalBalls) return fail(`${formatOvers(inn.legalBalls)} overs are already bowled, so the match cannot be shorter than ${Math.ceil(inn.legalBalls / BALLS_PER_OVER)}`);
+      if (p.target !== undefined && !s.innings[0]!.closed) return fail('A target can only be set once the first innings is over');
+      return OK;
+    }
+
     case 'finish': {
       if (!s.toss) return fail('Toss has not happened');
       if (s.result) return fail('Match already finished');
       if (p.outcome === 'win' && !s.teams.some((t) => t.id === p.winnerTeamId)) return fail('Pick the winning team');
+      if (p.method && p.outcome !== 'win') return fail('A method only applies to a win');
       return OK;
     }
   }
@@ -315,17 +345,18 @@ function closeInnings(s: CricketState, inn: Innings, reason: NonNullable<Innings
 function computeResult(s: CricketState): CricketResult {
   const [first, second] = s.innings as [Innings, Innings];
   const name = (id: string) => s.teams.find((t) => t.id === id)!.name;
-  const target = first.runs + 1;
+  const target = targetRuns(s);
+  const dls = s.revisedTarget != null ? ' (DLS method)' : '';
   if (second.runs >= target) {
     const left = maxWicketsFor(s, second.battingTeamId) - second.wickets;
     return {
       winnerTeamId: second.battingTeamId,
-      text: `${name(second.battingTeamId)} won by ${left} wicket${left === 1 ? '' : 's'}`,
+      text: `${name(second.battingTeamId)} won by ${left} wicket${left === 1 ? '' : 's'}${dls}`,
     };
   }
-  if (second.runs === first.runs) return { winnerTeamId: null, text: 'Match tied' };
-  const diff = first.runs - second.runs;
-  return { winnerTeamId: first.battingTeamId, text: `${name(first.battingTeamId)} won by ${diff} run${diff === 1 ? '' : 's'}` };
+  if (second.runs === target - 1) return { winnerTeamId: null, text: 'Match tied' };
+  const diff = target - 1 - second.runs;
+  return { winnerTeamId: first.battingTeamId, text: `${name(first.battingTeamId)} won by ${diff} run${diff === 1 ? '' : 's'}${dls}` };
 }
 
 export type BallPayload = z.infer<typeof schemas.ball>;
@@ -443,9 +474,9 @@ function applyBall(s: CricketState, inn: Innings, p: z.infer<typeof schemas.ball
 
   // --- innings end conditions
   const second = s.innings.length === 2;
-  if (second && inn.runs > s.innings[0]!.runs) closeInnings(s, inn, 'target');
+  if (second && inn.runs >= targetRuns(s)) closeInnings(s, inn, 'target');
   else if (inn.wickets >= maxWicketsFor(s, inn.battingTeamId)) closeInnings(s, inn, 'all_out');
-  else if (inn.legalBalls >= s.overs * BALLS_PER_OVER) closeInnings(s, inn, 'overs');
+  else if (inn.legalBalls >= inningsOvers(s, inn) * BALLS_PER_OVER) closeInnings(s, inn, 'overs');
 }
 
 function apply(prev: CricketState, event: SportEvent): CricketState {
@@ -535,7 +566,7 @@ function apply(prev: CricketState, event: SportEvent): CricketState {
       const i = inn!;
       i.runs += runs;
       i.extras.pen += runs;
-      if (s.innings.length === 2 && i.runs > s.innings[0]!.runs) closeInnings(s, i, 'target');
+      if (s.innings.length === 2 && i.runs >= targetRuns(s)) closeInnings(s, i, 'target');
       break;
     }
 
@@ -543,12 +574,28 @@ function apply(prev: CricketState, event: SportEvent): CricketState {
       closeInnings(s, inn!, 'declared');
       break;
 
+    case 'revise_overs': {
+      const p = schemas.revise_overs.parse(event.payload);
+      // innings already played keep the overs they were played under
+      for (const i of s.innings) if (i !== inn || i.closed) i.overs ??= s.overs;
+      const old = s.overs;
+      s.overs = p.overs;
+      // the bowler cap follows the shorter match unless it was set by hand
+      if (s.maxOversPerBowler) s.maxOversPerBowler = s.maxOversPerBowler === Math.ceil(old / 5) ? Math.ceil(p.overs / 5) : Math.min(s.maxOversPerBowler, p.overs);
+      if (p.target !== undefined) s.revisedTarget = p.target;
+      if (inn && !inn.closed) {
+        if (s.innings.length === 2 && inn.runs >= targetRuns(s)) closeInnings(s, inn, 'target');
+        else if (inn.legalBalls >= inningsOvers(s, inn) * BALLS_PER_OVER) closeInnings(s, inn, 'overs');
+      }
+      break;
+    }
+
     case 'finish': {
       const p = schemas.finish.parse(event.payload);
       const name = (id?: string) => s.teams.find((t) => t.id === id)?.name ?? '';
       s.result =
         p.outcome === 'win'
-          ? { winnerTeamId: p.winnerTeamId!, text: `${name(p.winnerTeamId)} won` }
+          ? { winnerTeamId: p.winnerTeamId!, text: `${name(p.winnerTeamId)} won${p.margin ? ` by ${p.margin.replace(/^by\s+/i, '')}` : ''}${p.method === 'dls' ? ' (DLS method)' : ''}` }
           : p.outcome === 'tie'
             ? { winnerTeamId: null, text: 'Match tied' }
             : { winnerTeamId: null, text: 'No result' };
@@ -577,6 +624,7 @@ function describeAction(event: SportEvent): CricketState['lastAction'] {
     case 'penalty': return { type: 'penalty', label: `PENALTY +${p.runs}` };
     case 'end_innings': return { type: 'end_innings', label: 'END INNINGS' };
     case 'finish': return { type: 'finish', label: 'RESULT' };
+    case 'revise_overs': return { type: 'revise_overs', label: 'OVERS REDUCED' };
   }
 }
 
@@ -585,7 +633,7 @@ function summary(s: CricketState, ctx: MatchContext): ScoreSummary {
     const inn = s.innings.find((i) => i.battingTeamId === t.id);
     return {
       name: t.name,
-      score: inn ? `${inn.runs}/${inn.wickets} (${formatOvers(inn.legalBalls)}/${s.overs})` : '—',
+      score: inn ? `${inn.runs}/${inn.wickets} (${formatOvers(inn.legalBalls)}/${inningsOvers(s, inn)})` : '—',
     };
   });
 
@@ -596,9 +644,9 @@ function summary(s: CricketState, ctx: MatchContext): ScoreSummary {
   else if (!s.toss) status = 'Waiting for toss';
   else if (!inn) status = `${name(s.toss.winnerTeamId)} won the toss and chose to ${s.toss.decision}`;
   else if (inn.closed) {
-    status = `Innings break · ${name(otherTeam(s, inn.battingTeamId))} need ${inn.runs + 1} to win`;
+    status = `Innings break · ${name(otherTeam(s, inn.battingTeamId))} need ${s.revisedTarget ?? inn.runs + 1} to win`;
   } else if (s.innings.length === 2) {
-    const need = s.innings[0]!.runs + 1 - inn.runs;
+    const need = targetRuns(s) - inn.runs;
     const left = s.overs * BALLS_PER_OVER - inn.legalBalls;
     status = `${name(inn.battingTeamId)} need ${need} run${need === 1 ? '' : 's'} from ${left} ball${left === 1 ? '' : 's'}`;
   } else {

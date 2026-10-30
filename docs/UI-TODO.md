@@ -30,6 +30,14 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 - [ ] **Optimistic updates**: a ball appears after the server confirms (~0.6s, shows "SAVING…"). The design implies it appears instantly.
 - [ ] **Free hit after a no-ball**: mentioned in the design copy; the engine does not enforce it.
 - [x] **Overs per match.** EDIT MATCH on a match (admins, tournament managers) can change its overs (1 to 50) with the time and venue, until the first event. Powerplay and the bowler cap follow unless set by hand. Not changeable after the toss.
+- [x] **Reduce overs mid-match, DLS result, end match.** The scorer console has REDUCE OVERS and END MATCH buttons (also in More actions).
+  Reduce overs works in either innings and at the innings break (new overs must be fewer than now and not fewer than the current
+  innings has bowled); innings already played keep their overs, the bowler cap follows. After the first innings a revised target can
+  be set (DLS table or your own figure): the chase ends when it is reached, and a chase that falls short loses by the gap
+  ("X won by 9 runs (DLS method)"). End match: win, tie, no result; from the second innings also "X won · DLS", and an optional
+  margin ("by 12 runs"). Not done: the app does not calculate DLS targets itself, and NRR for a shortened match uses the raw overs.
+- [x] **Cricket role on the profile.** /profile has BATTER / BOWLER / ALL-ROUNDER (click again to clear), saved in `players.role`
+  (BAT, BOWL, AR); picking one creates the person's player record if they had none. WK (set by an organiser) is kept and shown.
 - [x] **Edit the toss** until the first ball (from the openers step, the scoring screen header, or More actions). If openers were already picked they are cleared. [ ] **Change bowler mid-over** and **edit openers** still use Undo.
 - [x] **Tournament managers.** An admin adds managers to a tournament (MANAGERS tab). Managers score that tournament's matches and edit match time and venue; only admins edit the rest (settings, teams, fixtures, managers); everyone else is a viewer. In a tournament, ordinary scorers can only score a match assigned to them. Matches outside a tournament keep the older rule (any scorer unless assigned elsewhere).
 - [ ] **Abandoned** option in the end-match sheet: set it from the admin match page status for now.

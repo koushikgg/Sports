@@ -20,9 +20,9 @@ export default async function MyProfile({ searchParams }: { searchParams: Promis
   const db = getDb();
   const [me] = await db.select({ name: users.name, email: users.email, role: users.role }).from(users).where(eq(users.id, session.user.id)).limit(1);
   if (!me) redirect('/login');
-  const [player] = await db.select({ id: players.id }).from(players).where(eq(players.userId, session.user.id)).limit(1);
+  const [player] = await db.select({ id: players.id, role: players.role }).from(players).where(eq(players.userId, session.user.id)).limit(1);
   const profile = player ? await getPlayerProfile(player.id) : null;
-  const editor = <ProfileEditor name={me.name} email={me.email} role={me.role} avatar={user?.avatar ?? null} />;
+  const editor = <ProfileEditor name={me.name} email={me.email} role={me.role} avatar={user?.avatar ?? null} cricketRole={player?.role ?? null} />;
 
   return (
     <RatchShell active={null} user={user}>
