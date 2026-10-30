@@ -1,4 +1,5 @@
 import { asc, eq, getDb, inArray, players, sports, teamMembers, teams, tournaments, users, venues } from '@sports/db';
+import { teamLogoSrc } from '@/lib/avatar';
 import type { TournamentMeta } from '@sports/shared';
 
 /** Everything the create wizard needs, shaped for its props. */
@@ -22,7 +23,7 @@ export async function loadWizardData() {
 
   return {
     sports: sportRows.map((s) => ({ id: s.id, key: s.key, name: s.name })),
-    teams: teamRows.map((t) => ({ id: t.id, name: t.name, shortName: t.shortName, sportId: t.sportId })),
+    teams: teamRows.map((t) => ({ id: t.id, name: t.name, shortName: t.shortName, sportId: t.sportId, logo: teamLogoSrc(t.id, t.logoUpdatedAt) })),
     venues: venueRows.map((x) => ({ id: x.id, name: x.name })),
     tournaments: tournamentRows.map((t) => {
       const meta = t.meta as unknown as Partial<TournamentMeta>;

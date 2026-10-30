@@ -12,7 +12,8 @@ import { newMatchHref, scoreHref } from '@/lib/match-href';
 
 type Mode = 'tournament' | 'match';
 interface Sport { id: string; key: string; name: string }
-interface Team { id: string; name: string; shortName: string | null; sportId: string }
+const TEAM_PREVIEW = 6;
+interface Team { id: string; name: string; shortName: string | null; sportId: string; logo?: string | null }
 interface Venue { id: string; name: string }
 interface TournamentRef { id: string; name: string; sportId: string; overs: number | null; teamIds: string[]; venueIds: string[] }
 interface Player { id: string; name: string; role: string | null }
@@ -101,8 +102,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="cw-field"><Label>{label}</Label>{children}</label>;
 }
 
-function TeamBadge({ name, short, size = 32 }: { name: string; short?: string | null; size?: number }) {
+function TeamBadge({ name, short, logo, size = 32 }: { name: string; short?: string | null; logo?: string | null; size?: number }) {
   const t = teamTint(name);
+  // eslint-disable-next-line @next/next/no-img-element
+  if (logo) return <img src={logo} alt="" className="cw-code" style={{ width: size, height: size, objectFit: 'cover' }} />;
   return <span className="cw-code" style={{ width: size, height: size, background: t.bg, color: t.fg }} aria-hidden>{teamCode(name, short)}</span>;
 }
 
@@ -122,6 +125,7 @@ export function Wizard(props: Props) {
   const [teamList, setTeamList] = useState(props.teams);
   const [venueList, setVenueList] = useState(props.venues);
   const [newTeam, setNewTeam] = useState('');
+  const [teamQuery, setTeamQuery] = useState('');
   const [newVenue, setNewVenue] = useState('');
   const setAddError = (m: string | null) => { if (m) toast.error(m); };
 
@@ -371,26 +375,35 @@ export function Wizard(props: Props) {
         </div>
       </>
     );
-    if (isT && step === 2) return (
-      <>
-        <div className="cw-row-between">
-          <span className="cw-count" data-ok={teamCount >= minTeams ? 'true' : undefined}>{teamCount} TEAMS SELECTED</span>
-          {sportTeams.length > 0 && <button type="button" className="cw-link" onClick={() => setT({ ...t, teamIds: teamCount === sportTeams.length ? [] : sportTeams.map((x) => x.id) })}>{teamCount === sportTeams.length ? 'CLEAR ALL' : 'SELECT ALL'}</button>}
-        </div>
-        {sportTeams.length === 0 && <p className="cw-muted">No {tSport?.name} teams yet. Add the first one below.</p>}
-        <div className="cw-teams">
-          {sportTeams.map((x) => {
-            const on = t.teamIds.includes(x.id);
-            return (
-              <button key={x.id} type="button" aria-pressed={on} data-on={on ? 'true' : undefined} onClick={() => setT({ ...t, teamIds: toggleIn(t.teamIds, x.id) })}>
-                <TeamBadge name={x.name} short={x.shortName} /><span className="cw-tname">{x.name}</span><span className="cw-check">{on ? '✓' : ''}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="cw-add"><input className="cw-input" value={newTeam} onChange={(e) => setNewTeam(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && makeTeam()} placeholder="Add a new team" maxLength={60} /><button type="button" className="cw-btn" data-variant="gray" onClick={makeTeam} disabled={!newTeam.trim()}>ADD TEAM</button></div>
-      </>
-    );
+    if (isT && step === 2) {
+      const q = teamQuery.trim().toLowerCase();
+      const picked = sportTeams.filter((x) => t.teamIds.includes(x.id));
+      const rest = sportTeams.filter((x) => !t.teamIds.includes(x.id) && (!q || x.name.toLowerCase().includes(q) || (x.shortName ?? '').toLowerCase().includes(q)));
+      const shownRest = q ? rest.slice(0, 12) : rest.slice(0, TEAM_PREVIEW);
+      const shown = [...picked.filter((x) => !q || x.name.toLowerCase().includes(q)), ...shownRest];
+      return (
+        <>
+          <div className="cw-row-between">
+            <span className="cw-count" data-ok={teamCount >= minTeams ? 'true' : undefined}>{teamCount} TEAMS SELECTED</span>
+          </div>
+          {sportTeams.length === 0 && <p className="cw-muted">No {tSport?.name} teams yet. Add the first one below.</p>}
+          {sportTeams.length > 0 && <input className="cw-input" type="search" value={teamQuery} onChange={(e) => setTeamQuery(e.target.value)} placeholder={`Search ${tSport?.name ?? ''} teams`} aria-label="Search teams" />}
+          <div className="cw-teams">
+            {shown.map((x) => {
+              const on = t.teamIds.includes(x.id);
+              const n = rosterOf(x.id).length;
+              return (
+                <button key={x.id} type="button" aria-pressed={on} data-on={on ? 'true' : undefined} onClick={() => setT({ ...t, teamIds: toggleIn(t.teamIds, x.id) })}>
+                  <TeamBadge name={x.name} short={x.shortName} logo={x.logo} /><span className="cw-tname">{x.name}<small>{n} {n === 1 ? 'player' : 'players'}</small></span><span className="cw-check">{on ? '✓' : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+          {q && shown.length === 0 && <p className="cw-muted">No {tSport?.name} team matches “{teamQuery.trim()}”.</p>}
+          <div className="cw-add"><input className="cw-input" value={newTeam} onChange={(e) => setNewTeam(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && makeTeam()} placeholder="Add a new team" maxLength={60} /><button type="button" className="cw-btn" data-variant="gray" onClick={makeTeam} disabled={!newTeam.trim()}>ADD TEAM</button></div>
+        </>
+      );
+    }
     if (isT && step === 3) return (
       <>
         <div className="cw-two">
@@ -439,7 +452,7 @@ export function Wizard(props: Props) {
                 <div className="cw-sidelist">
                   {matchTeams.map((x) => (
                     <button key={x.id} type="button" disabled={other === x.id} aria-pressed={chosen === x.id} data-on={chosen === x.id ? 'true' : undefined} onClick={() => pickTeam(side, x.id)}>
-                      <TeamBadge name={x.name} short={x.shortName} size={26} /><span className="cw-sname">{x.name}</span><small>{chosen === x.id ? 'SELECTED' : other === x.id ? (side === 'a' ? 'AWAY' : 'HOME') : ''}</small>
+                      <TeamBadge name={x.name} short={x.shortName} logo={x.logo} size={26} /><span className="cw-sname">{x.name}</span><small>{chosen === x.id ? 'SELECTED' : other === x.id ? (side === 'a' ? 'AWAY' : 'HOME') : ''}</small>
                     </button>
                   ))}
                 </div>
@@ -649,7 +662,7 @@ export function Wizard(props: Props) {
             <div className="cw-preview">
               <div className="cw-row-between"><span className="lbl">{(tournament?.name ?? 'Friendly').toUpperCase()} · {m.rules.overs} OVERS</span><span className="mx-badge" data-tone="up"><i />UPCOMING</span></div>
               {[aTeam, bTeam].map((x, i) => (
-                <span key={i} className="cw-pvteam">{x ? <TeamBadge name={x.name} short={x.shortName} size={30} /> : <span className="cw-code cw-code-empty" />}<b>{x?.name ?? (i === 0 ? 'Home team' : 'Away team')}</b></span>
+                <span key={i} className="cw-pvteam">{x ? <TeamBadge name={x.name} short={x.shortName} logo={x.logo} size={30} /> : <span className="cw-code cw-code-empty" />}<b>{x?.name ?? (i === 0 ? 'Home team' : 'Away team')}</b></span>
               ))}
               <div className="cw-pvline">{fmtD(m.date)} · {fmtT(m.time)}</div>
               <div className="cw-row-between cw-muted"><span>{venueName(m.venueId) || 'Venue to be confirmed'}</span><span className="lbl">{m.rules.overs} OVERS</span></div>
