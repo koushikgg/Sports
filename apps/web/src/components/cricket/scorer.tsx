@@ -40,8 +40,8 @@ import { toast, Toaster } from '@/components/ratch/toast';
 import { useScorer } from '@/lib/use-live-match';
 import { ScorerCard } from './scorer-card';
 
-type Sheet = 'extras' | '57' | 'wicket' | 'retire' | 'result' | 'toss';
-type Active = Sheet | 'openers' | 'batter' | 'bowler' | 'final';
+type Sheet = 'extras' | '57' | 'wicket' | 'retire' | 'result' | 'toss' | 'openers';
+type Active = Sheet | 'batter' | 'bowler' | 'final';
 type Credit = 'bat' | 'b' | 'lb';
 type Delivery = 'normal' | 'wd' | 'nb';
 
@@ -159,7 +159,9 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   const forced: Active | null =
     sheet === 'toss' ? null
     : s.awaiting === 'toss' ? 'toss'
-    : s.awaiting === 'innings_start' ? 'openers'
+    // the very first innings is set up straight after the toss; after that the innings break shows the normal screen,
+    // so the last ball can still be undone before the next innings is started
+    : s.awaiting === 'innings_start' ? (s.innings.length === 0 ? 'openers' : null)
     : s.awaiting === 'batter' ? 'batter'
     : s.awaiting === 'bowler' ? 'bowler'
     : s.awaiting === 'complete' && !ackFinal ? 'final'
@@ -172,6 +174,9 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   // Taps queue while a ball is saving (see useScorer), so keys stay live; `busy` only drives feedback.
   const canScore = s.awaiting === 'ball' && connected;
   const canUndo = !!s.lastAction && connected;
+  // what Undo would remove, in words, so nobody has to guess
+  const undoTitle = !s.lastAction ? 'NOTHING TO UNDO' : s.lastAction.type === 'ball' ? 'UNDO LAST BALL' : `UNDO ${s.lastAction.label}`;
+  const undoNote = !s.lastAction ? 'Nothing has been scored yet' : s.lastAction.type === 'ball' ? `Removes the last ball: ${s.lastAction.label}` : `Removes: ${s.lastAction.label.toLowerCase()}`;
   const slots = inn ? [inn.striker, inn.nonStriker] : [null, null];
 
   // ---- actions
@@ -184,7 +189,8 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
   const scoreBall = (p: { runs: number; extra?: Extra; nbKind?: Credit; wicket?: { kind: WicketKind; playerId: string; fielderId?: string } }) =>
     run('ball', p, `Recorded ${chipText(chipFor(p))}`);
 
-  const undo = () => { if (canUndo) void run('undo', {}, `${s.lastAction!.label} removed`); };
+  // one at a time: a second tap while the first is saving would remove another ball
+  const undo = () => { if (canUndo && !busy) void run('undo', {}, s.lastAction!.type === 'ball' ? `Last ball removed (${s.lastAction!.label})` : `${s.lastAction!.label.toLowerCase()} removed`); };
   const swap = () => { if (canScore) void run('swap_strike', {}, 'Strike swapped'); };
 
   /** Fix a wrong toss until the first ball. If the openers were already picked they are cleared and chosen again. */
@@ -319,7 +325,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
     toss: sheet === 'toss'
       ? { kicker: 'CORRECT THE TOSS', title: 'Edit toss', w: 560, primary: 'SAVE TOSS', secondary: 'CANCEL', closable: true }
       : { kicker: 'BEFORE THE MATCH', title: 'Toss', w: 560, primary: 'CONTINUE', secondary: 'CANCEL', closable: false },
-    openers: { kicker: `INNINGS ${s.innings.length + 1} · ${nextBat ? teamName(nextBat).toUpperCase() : ''} BAT`, title: 'Who starts the innings?', w: 760, primary: 'START INNINGS', closable: false },
+    openers: { kicker: `INNINGS ${s.innings.length + 1} · ${nextBat ? teamName(nextBat).toUpperCase() : ''} BAT`, title: 'Who starts the innings?', w: 760, primary: 'START INNINGS', secondary: sheet === 'openers' ? 'CANCEL' : undefined, closable: sheet === 'openers' },
     batter: { kicker: s.lastAction?.type === 'retire' ? 'BATTER RETIRED' : 'WICKET FELL', title: 'Who is the new batter?', w: 560, secondary: 'UNDO', closable: false },
     bowler: { kicker: `OVER ${lastOver?.no ?? Math.max(1, Math.floor((inn?.legalBalls ?? 0) / 6))} COMPLETE · ${lastOver?.runs ?? 0} RUNS`, title: 'Who bowls next?', w: 560, secondary: 'UNDO', closable: false },
     final: { kicker: 'END OF MATCH', title: 'Result', w: 560, primary: 'DONE', secondary: 'UNDO LAST BALL', closable: true },
@@ -397,6 +403,19 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
       ) : (
         <div className="sc-body">
           <div className="sc-main">
+            {inn && s.awaiting === 'innings_start' && s.innings.length > 0 && !s.result && (
+              <div className="sc-card sc-break" role="status">
+                <div className="sc-break-text">
+                  <span className="lbl">INNINGS {s.innings.length} COMPLETE</span>
+                  <b>{teamName(inn.battingTeamId)} {inn.runs}/{inn.wickets} ({formatOvers(inn.legalBalls)})</b>
+                  <small>
+                    {nextBat && s.innings.length === 1 ? `${teamName(nextBat)} need ${inn.runs + 1} to win. ` : ''}
+                    Scoring is paused. If the last ball was a mistake, undo it first.
+                  </small>
+                </div>
+                <Btn variant="primary" onClick={() => openSheet('openers')}>START INNINGS {s.innings.length + 1}</Btn>
+              </div>
+            )}
             <div className="sc-card sc-hero">
               {inn ? (
                 <>
@@ -472,7 +491,10 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                 <div className="sc-card sc-over">
                   <div className="sc-row" style={{ flexWrap: 'nowrap' }}>
                     <span className="lbl">THIS OVER · {overNo}{s.freeHit && <span className="sc-freehit"> · FREE HIT</span>}</span>
-                    <span className="lbl">{currentOverRuns(inn)} RUNS</span>
+                    <span className="sc-row" style={{ gap: 10, flexWrap: 'nowrap' }}>
+                      <span className="lbl">{currentOverRuns(inn)} RUNS</span>
+                      {s.lastAction?.type === 'ball' && <button type="button" className="sc-undo-mini" disabled={!canUndo || busy} onClick={undo}>↶ UNDO LAST BALL</button>}
+                    </span>
                   </div>
                   <div className="sc-over-chips">
                     {inn.thisOver.map((c, i) => (
@@ -524,13 +546,15 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                 </button>
               ))}
             </div>
+            <button type="button" className="sc-undo" disabled={!canUndo || busy} onClick={undo} aria-label={`${undoTitle}. ${undoNote}`}>
+              <span className="sc-undo-ico" aria-hidden>↶</span>
+              <span className="sc-undo-text"><b>{undoTitle}</b><small>{undoNote}</small></span>
+              <kbd aria-hidden>U</kbd>
+            </button>
             <div className="sc-pills">
-              <button className="sc-pill" disabled={!canUndo} onClick={undo}>
-                {s.lastAction ? `UNDO ${s.lastAction.label.toUpperCase()} · U` : 'NOTHING TO UNDO'}
-              </button>
               <button className="sc-pill" disabled={!canScore} onClick={swap}>SWAP STRIKE · S</button>
+              <button className="sc-pill" data-solid="card" onClick={() => setDrawer(true)}>MORE ACTIONS</button>
             </div>
-            <button className="sc-pill" data-solid="card" onClick={() => setDrawer(true)}>MORE ACTIONS</button>
             <div className="sc-kbd">
               <span className="lbl lbl-sm">KEYBOARD</span>
               <span>0–4, 6 RUNS · W WIDE · N NO BALL · B BYE · L LEG BYE · X WICKET · U UNDO · S SWAP · ESC CLOSE</span>
