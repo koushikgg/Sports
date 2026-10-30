@@ -83,7 +83,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
             </div>
 
             <div style={box}>
-              <span className="lbl">VENUES</span>
+              <span className="lbl">VENUES · OPTIONAL</span>
               <div style={row}>
                 {venues.map((v) => { const on = f.venueIds.includes(v.id); return <button key={v.id} type="button" aria-pressed={on} className="tm-btn" style={pill(on)} onClick={() => set('venueIds', on ? f.venueIds.filter((x) => x !== v.id) : [...f.venueIds, v.id])}>{v.name.toUpperCase()}</button>; })}
               </div>
@@ -148,7 +148,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
 
             <div className="tm-acts">
               <button type="button" className="tm-btn" onClick={() => setOpen(false)}>CANCEL</button>
-              <button type="submit" className="tm-btn" data-v={clears || remakes ? 'danger' : 'amber'} disabled={busy || !f.name.trim() || f.venueIds.length === 0 || tooFew}>{busy ? 'SAVING…' : clears ? 'SAVE + REMOVE FIXTURES' : remakes ? 'SAVE + MAKE FIXTURES AGAIN' : 'SAVE'}</button>
+              <button type="submit" className="tm-btn" data-v={clears || remakes ? 'danger' : 'amber'} disabled={busy || !f.name.trim() || tooFew}>{busy ? 'SAVING…' : clears ? 'SAVE + REMOVE FIXTURES' : remakes ? 'SAVE + MAKE FIXTURES AGAIN' : 'SAVE'}</button>
             </div>
           </form>
         </div>

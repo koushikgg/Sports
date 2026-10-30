@@ -141,7 +141,8 @@ export const tournamentInputSchema = z
     sportId: uuid,
     startDate: date,
     endDate: date,
-    venueIds: z.array(uuid).min(1, 'Pick at least one venue.'),
+    /** Optional: a tournament can be made without a venue and matches can name one later. */
+    venueIds: z.array(uuid).max(50).default([]),
     formatKey: z.enum(FORMAT_KEYS),
     /** Cricket only. */
     overs: z.number().int().min(1).max(50).optional(),
@@ -171,7 +172,7 @@ export const tournamentEditSchema = z
     name: z.string().trim().min(1, 'Give the tournament a name.').max(80),
     startDate: date,
     endDate: date,
-    venueIds: z.array(uuid).min(1, 'Pick at least one venue.'),
+    venueIds: z.array(uuid).max(50).default([]),
     formatKey: z.enum(FORMAT_KEYS),
     overs: z.number().int().min(1).max(50).optional(),
     points: z.object({

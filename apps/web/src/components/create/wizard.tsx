@@ -213,7 +213,7 @@ export function Wizard(props: Props) {
   const minTeams = minTeamsFor(t.formatKey, t.qualify);
   const invalid: string[] = mode === 'tournament'
     ? [
-        !t.name.trim() ? 'Give the tournament a name.' : !t.start || !t.end ? 'Choose the start and end dates.' : t.end < t.start ? 'End date is before the start date.' : !t.venueIds.length ? 'Pick at least one venue.' : '',
+        !t.name.trim() ? 'Give the tournament a name.' : !t.start || !t.end ? 'Choose the start and end dates.' : t.end < t.start ? 'End date is before the start date.' : '',
         '',
         teamCount < minTeams ? `Add at least ${minTeams} teams. ${teamCount} selected.` : '',
         '',
@@ -299,7 +299,7 @@ export function Wizard(props: Props) {
   const venueName = (id: string) => venueList.find((x) => x.id === id)?.name ?? '';
   const review: [string, string, number][] = isT
     ? [
-        ['NAME', t.name || '—', 0], ['SPORT', tSport?.name ?? '—', 0], ['DATES', `${fmtD(t.start)} – ${fmtD(t.end)}`, 0], ['VENUES', t.venueIds.map(venueName).join(', ') || '—', 0],
+        ['NAME', t.name || '—', 0], ['SPORT', tSport?.name ?? '—', 0], ['DATES', `${fmtD(t.start)} – ${fmtD(t.end)}`, 0], ['VENUES', t.venueIds.map(venueName).join(', ') || 'None yet', 0],
         ['FORMAT', `${FORMATS[t.formatKey].label}${tIsCricket ? ` · ${t.overs} overs` : ''}${t.formatKey === 'lk' ? ` · top ${t.qualify} qualify` : ''}`, 1],
         ['POINTS', `Win ${t.points.win} · Tie ${t.points.tie} · No result ${t.points.noResult} · Tiebreak ${t.tiebreak}`, 1],
         ['TEAMS', t.teamIds.map((id) => teamById(id)?.name).filter(Boolean).join(', ') || '—', 2],
@@ -332,8 +332,8 @@ export function Wizard(props: Props) {
           <Field label="STARTS"><input type="date" className="cw-input" value={t.start} onChange={(e) => setT({ ...t, start: e.target.value })} /></Field>
           <Field label="ENDS"><input type="date" className="cw-input" value={t.end} min={t.start} onChange={(e) => setT({ ...t, end: e.target.value })} /></Field>
         </div>
-        <div className="cw-block"><Label>VENUES · PICK ONE OR MORE</Label>
-          {venueList.length === 0 && <p className="cw-muted">No venues yet. Add the first one below.</p>}
+        <div className="cw-block"><Label>VENUES · OPTIONAL</Label>
+          {venueList.length === 0 && <p className="cw-muted">No venues yet. You can add one below, or skip it and name a venue on each match later.</p>}
           <Pills multi value={t.venueIds} onPick={(v) => setT({ ...t, venueIds: toggleIn(t.venueIds, v) })} options={venueList.map((x) => ({ v: x.id, l: x.name }))} />
           <div className="cw-add"><input className="cw-input" value={newVenue} onChange={(e) => setNewVenue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && makeVenue()} placeholder="Add a new venue" maxLength={80} /><button type="button" className="cw-btn" data-variant="gray" onClick={makeVenue} disabled={!newVenue.trim()}>ADD VENUE</button></div>
         </div>

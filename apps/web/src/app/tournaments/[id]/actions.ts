@@ -135,7 +135,7 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
   }
 
   const db = getDb();
-  const venueRows = await db.select().from(venues).where(inArray(venues.id, v.venueIds));
+  const venueRows = v.venueIds.length ? await db.select().from(venues).where(inArray(venues.id, v.venueIds)) : [];
   if (venueRows.length !== new Set(v.venueIds).size) return { error: 'A selected venue no longer exists.' };
   const byId = new Map(venueRows.map((x) => [x.id, x]));
 

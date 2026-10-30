@@ -48,7 +48,7 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
   const [sport] = await db.select().from(sports).where(eq(sports.id, v.sportId)).limit(1);
   if (!sport) return { ok: false, error: 'Unknown sport.' };
   const [venueRows, teamRows] = await Promise.all([
-    db.select().from(venues).where(inArray(venues.id, v.venueIds)),
+    v.venueIds.length ? db.select().from(venues).where(inArray(venues.id, v.venueIds)) : Promise.resolve([]),
     db.select().from(teams).where(inArray(teams.id, v.teamIds)),
   ]);
   if (venueRows.length !== new Set(v.venueIds).size) return { ok: false, error: 'A selected venue no longer exists.' };
