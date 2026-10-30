@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 const BAND = {
   guest: { title: 'Run the games? Sign in.', text: 'Organisers and scorers sign in to schedule matches and keep the live score moving.', href: '/login', label: 'SIGN IN' },
   scorer: { title: 'Your scoring queue', text: 'Matches assigned to you, and matches with no scorer yet, are waiting.', href: '/score', label: 'OPEN QUEUE' },
-  admin: { title: 'Set up the next game', text: 'Create a tournament with its teams and rules, or schedule a single match with playing XIs.', href: '/create', label: 'CREATE' },
+  admin: { title: 'Set up the next game', text: 'Create a tournament with its teams and rules, then add its matches from inside it.', href: '/create', label: 'CREATE' },
 } as const;
 
 export default async function Showcase() {
@@ -55,12 +55,12 @@ export default async function Showcase() {
           <div className="sx-cta">
             <Link href="/matches" className="mx-btn mx-btn-lg" data-variant="amber">{live.length ? `${live.length} LIVE NOW` : 'SEE ALL MATCHES'}</Link>
             <Link href="/tournaments" className="mx-btn mx-btn-lg" data-variant="gray">TOURNAMENTS</Link>
-            {user && <Link href={user.role === 'admin' ? '/create' : '/score'} className="mx-btn mx-btn-lg" data-variant="blue">{user.role === 'admin' ? 'CREATE' : 'SCORE'}</Link>}
+            {user && <Link href={user.role === 'admin' ? '/tournaments/create' : '/score'} className="mx-btn mx-btn-lg" data-variant="blue">{user.role === 'admin' ? 'CREATE' : 'SCORE'}</Link>}
           </div>
         </div>
         <div className="sx-hero-card">
           {featured && spotlight ? (
-            <Featured key={featured.matchId} initial={featured} competition={spotlight.competition} canScore={canScoreMatch(user, spotlight)} />
+            <Featured key={featured.matchId} initial={featured} competition={spotlight.competition} tournamentId={spotlight.tournamentId} canScore={canScoreMatch(user, spotlight)} />
           ) : (
             <p className="sx-empty">No match is live right now. The next fixtures are below.</p>
           )}

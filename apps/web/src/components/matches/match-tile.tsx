@@ -1,5 +1,5 @@
 'use client';
-import { matchHref } from '@/lib/match-href';
+import { matchHref, scoreHref } from '@/lib/match-href';
 import Link from 'next/link';
 import type { MatchSnapshot, ScoreSummary } from '@sports/shared';
 import type { MatchCardData } from '@/lib/queries';
@@ -59,7 +59,7 @@ function View({
       <div className="mx-card-foot">
         <span className="mx-venue">{m.venue ?? ''}</span>
         {canOpenScorer && (
-          <Link href={`/score/${m.id}`} className="mx-btn" data-variant="amber">
+          <Link href={scoreHref(m)} className="mx-btn" data-variant="amber">
             {group === 'live' ? 'RESUME SCORING' : 'START SCORING'}
           </Link>
         )}

@@ -15,8 +15,11 @@ export const ROUTE_RULES: { pattern: RegExp; allow: Viewer[] }[] = [
   // the scoring console keeps working at its old URL (it redirects), and is open to scorers
   { pattern: /^\/admin\/matches\/[^/]+\/score\/?$/, allow: MEMBERS },
   { pattern: /^\/admin(\/|$)/, allow: ADMINS },
-  { pattern: /^\/create(\/|$)/, allow: ADMINS },
-  { pattern: /^\/tournaments\/[^/]+\/create\/?$/, allow: ADMINS },
+  { pattern: /^\/tournaments\/create\/?$/, allow: ADMINS },
+  { pattern: /^\/tournaments\/[^/]+\/matches\/create\/?$/, allow: ADMINS },
+  // a match's scorer console lives under the match (a tournament's, or a sport's for a match with no tournament)
+  { pattern: /^\/tournaments\/[^/]+\/matches\/[^/]+\/score\/?$/, allow: MEMBERS },
+  { pattern: /^\/sports\/[^/]+\/matches\/[^/]+\/score\/?$/, allow: MEMBERS },
   { pattern: /^\/score(\/|$)/, allow: MEMBERS },
   { pattern: /^\/profile(\/|$)/, allow: MEMBERS },
   { pattern: /^\/teams(\/|$)/, allow: MEMBERS },
@@ -49,7 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'teams', label: 'TEAMS', href: '/teams', allow: MEMBERS },
   { key: 'players', label: 'PLAYERS', href: '/players', allow: MEMBERS },
   { key: 'score', label: 'SCORE', href: '/score', allow: MEMBERS },
-  { key: 'create', label: 'CREATE', href: '/create', allow: ADMINS },
+  { key: 'create', label: 'CREATE', href: '/tournaments/create', allow: ADMINS },
 ];
 
 export const navFor = (role: Role | null | undefined): NavItem[] => {

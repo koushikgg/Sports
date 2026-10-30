@@ -83,8 +83,17 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 - [ ] "Followers have been notified" copy from the Create design is not shown: nothing notifies anyone yet.
 - [ ] Editing a tournament or a match after it is created (rules, teams, XI until the toss).
 - [ ] Terms of use and privacy policy pages. The login page shows the sentence without links.
-- [ ] Members-only matches are hidden from lists and pages, but anyone who knows the match id can still join its live
-  socket room. Needs an auth check on joining.
+- [x] **Private tournaments.** A tournament is Public or Private (WHO CAN SEE IT in the wizard and editor). Private ones, and
+  their matches, are visible only to admins and that tournament's managers; everyone else sees a "This tournament is
+  private" notice (guests get a sign-in button). The live socket room checks this too. Player stats and leaderboards are
+  not filtered by it.
+- [x] **Route tree.** Everything sits under its parent: `/tournaments/create`, `/tournaments/[id]/matches/create`,
+  `/tournaments/[id]/matches/[matchId]` (+ `/score`, `/display`), and `/sports/[sport]/matches/[id]` (+ `/score`, `/display`)
+  for matches with no tournament. Old addresses (`/create`, `/score/[id]`, `/display/[id]`, `/tournaments/[id]/create`)
+  redirect. A wrong tournament in the address is corrected.
+- [ ] Creating a standalone (friendly) cricket match from the UI was removed with the wizard's tournament/match switch; those
+  matches can still be scored and viewed under `/sports/[sport]/matches/[id]`. Needs a home in the new tree.
+- [x] Venues are optional for a tournament; matches then have no venue.
 - [ ] Real Google round trip is untested until the real client id is added (see docs/AUTH.md).
 - [ ] The login brand card shows what is live, or next, from the database; the design's sample feed is not used.
 

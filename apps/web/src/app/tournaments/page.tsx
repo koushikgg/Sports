@@ -26,7 +26,7 @@ export default async function TournamentsPage({ searchParams }: { searchParams: 
           <span className="lbl">ALL SPORTS</span>
           <h1>Tournaments</h1>
         </div>
-        {user?.role === 'admin' && <Link href="/create" className="mx-btn mx-btn-lg" data-variant="amber">NEW TOURNAMENT</Link>}
+        {user?.role === 'admin' && <Link href="/tournaments/create" className="mx-btn mx-btn-lg" data-variant="amber">NEW TOURNAMENT</Link>}
       </div>
       <TournamentsBoard list={list} />
     </RatchShell>

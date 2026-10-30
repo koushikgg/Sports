@@ -13,17 +13,19 @@ describe('accessFor', () => {
 
   it('guests are sent to sign in for protected pages; wrong roles are forbidden', () => {
     expect(accessFor(null, '/admin')).toBe('login');
-    expect(accessFor(null, '/create')).toBe('login');
-    expect(accessFor(null, '/tournaments/abc/create')).toBe('login');
-    expect(accessFor('scorer', '/tournaments/abc/create')).toBe('forbidden');
-    expect(accessFor('admin', '/tournaments/abc/create')).toBe('ok');
+    expect(accessFor(null, '/tournaments/create')).toBe('login');
+    expect(accessFor(null, '/tournaments/abc/matches/create')).toBe('login');
+    expect(accessFor('scorer', '/tournaments/abc/matches/create')).toBe('forbidden');
+    expect(accessFor('admin', '/tournaments/abc/matches/create')).toBe('ok');
     expect(accessFor(null, '/tournaments/abc')).toBe('ok');
     expect(accessFor(null, '/teams')).toBe('login');
     expect(accessFor('scorer', '/admin')).toBe('forbidden');
     expect(accessFor('scorer', '/admin/teams')).toBe('forbidden');
-    expect(accessFor('scorer', '/create')).toBe('forbidden');
+    expect(accessFor('scorer', '/tournaments/create')).toBe('forbidden');
     expect(accessFor('admin', '/admin/teams')).toBe('ok');
-    expect(accessFor('admin', '/create')).toBe('ok');
+    expect(accessFor('admin', '/tournaments/create')).toBe('ok');
+    // a tournament called "create" is not possible: the id is a uuid, and the new-tournament page is its own route
+    expect(accessFor('scorer', '/tournaments/some-id')).toBe('ok');
   });
 
   it('members (scorer and admin) can see the directories and the score queue', () => {
@@ -187,5 +189,30 @@ describe('who can score and edit a tournament match', () => {
     expect(canEditMatch(manager, { tournamentId: null })).toBe(false);
     expect(canEditMatch(scorer, { tournamentId: t1 })).toBe(false);
     expect(canEditMatch(null, { tournamentId: t1 })).toBe(false);
+  });
+});
+
+describe('the route tree: a match\'s pages live under the match', () => {
+  it('the scorer console is for signed-in members, under a tournament or a sport', () => {
+    for (const p of ['/tournaments/t1/matches/m1/score', '/sports/cricket/matches/m1/score', '/score', '/score/m1']) {
+      expect(accessFor(null, p)).toBe('login');
+      expect(accessFor('scorer', p)).toBe('ok');
+      expect(accessFor('admin', p)).toBe('ok');
+    }
+  });
+  it('the match page and TV mode are open to everyone', () => {
+    for (const p of ['/tournaments/t1/matches/m1', '/tournaments/t1/matches/m1/display', '/sports/cricket/matches/m1', '/sports/cricket/matches/m1/display', '/tournaments/t1']) {
+      expect(accessFor(null, p)).toBe('ok');
+    }
+  });
+  it('creating is for admins: a tournament, and a match inside a tournament', () => {
+    for (const p of ['/tournaments/create', '/tournaments/t1/matches/create']) {
+      expect(accessFor(null, p)).toBe('login');
+      expect(accessFor('scorer', p)).toBe('forbidden');
+      expect(accessFor('admin', p)).toBe('ok');
+    }
+  });
+  it('the old addresses are not special any more', () => {
+    expect(accessFor('scorer', '/tournaments/t1/create')).toBe('ok'); // it only redirects
   });
 });

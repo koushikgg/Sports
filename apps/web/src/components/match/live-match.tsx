@@ -9,6 +9,7 @@ import { ScorerCard } from '@/components/cricket/scorer-card';
 import { Avatar } from '@/components/ratch/avatar';
 import { Chip } from '@/components/ratch/chip';
 import { LocalTime } from '@/components/local-time';
+import { displayHref, scoreHref } from '@/lib/match-href';
 import type { MatchCardData } from '@/lib/queries';
 import { useLiveMatch } from '@/lib/use-live-match';
 
@@ -214,8 +215,8 @@ export function MatchHeader({ card, sportName, canScore, scheduleVenues }: { car
         </div>
         <div className="mp-actions">
           {scheduleVenues && card.status === 'scheduled' && card.seq === 0 && <EditMatchSchedule matchId={card.id} scheduledAt={card.scheduledAt} venue={card.venue} venues={scheduleVenues} />}
-          {canScore && !finished && <Link href={`/score/${card.id}`} className="mx-btn mx-btn-lg" data-variant="amber">{card.seq === 0 ? 'START MATCH' : 'OPEN SCORER'}</Link>}
-          <Link href={`/display/${card.id}`} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE ↗</Link>
+          {canScore && !finished && <Link href={scoreHref(card)} className="mx-btn mx-btn-lg" data-variant="amber">{card.seq === 0 ? 'START MATCH' : 'OPEN SCORER'}</Link>}
+          <Link href={displayHref(card)} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE ↗</Link>
         </div>
       </div>
     </>

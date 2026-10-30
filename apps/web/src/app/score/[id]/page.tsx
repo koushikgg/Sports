@@ -1,30 +1,12 @@
-import { matchHref } from '@/lib/match-href';
 import { notFound, redirect } from 'next/navigation';
-import '@sports/sports-engine/src/all';
-import { getMatchCard, getSnapshot } from '@sports/scoring';
-import { canScoreMatch } from '@sports/shared';
-import { CricketScorer } from '@/components/cricket/scorer';
-import { ScorerDebug } from '@/components/scorer-debug';
-import { PageHeader } from '@/components/ui';
-import { getShellUser } from '@/lib/shell-user';
-import { viewerOf } from '@/lib/viewer';
+import { scoreHref } from '@/lib/match-href';
+import { matchRoute } from '@/lib/match-route';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ScorePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { user } = await getShellUser();
-  const [snapshot, card] = await Promise.all([getSnapshot(id), getMatchCard(id, viewerOf(user))]);
-  if (!snapshot || !card) notFound();
-
-  // Role is enforced by the middleware; this adds the per-match rule (assigned scorer, finished matches).
-  if (!canScoreMatch(user, card)) redirect(matchHref(card));
-
-  if (snapshot.sportKey === 'cricket') return <CricketScorer initial={snapshot} venue={card.venue} backHref={matchHref(card)} />;
-  return (
-    <div className="mx-auto max-w-xl p-6">
-      <PageHeader title="Scorer console" />
-      <ScorerDebug initial={snapshot} />
-    </div>
-  );
+/** The old scorer address. The console lives under its match now; this sends people there. */
+export default async function OldScorerAddress({ params }: { params: Promise<{ id: string }> }) {
+  const m = await matchRoute((await params).id);
+  if (!m) notFound();
+  redirect(scoreHref(m));
 }

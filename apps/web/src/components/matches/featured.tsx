@@ -5,9 +5,10 @@ import { currentInnings, formatOvers, otherTeam, runRate, type CricketState } fr
 import { chase, projected } from '@sports/sports-engine/src/cricket-view';
 import { Chip } from '@/components/ratch/chip';
 import { useLiveMatch } from '@/lib/use-live-match';
+import { matchHref, scoreHref } from '@/lib/match-href';
 
 /** The big card for the live cricket match with the most activity. */
-export function Featured({ initial, competition, canScore }: { initial: MatchSnapshot; competition: string | null; canScore: boolean }) {
+export function Featured({ initial, competition, canScore, tournamentId }: { initial: MatchSnapshot; competition: string | null; canScore: boolean; tournamentId?: string | null }) {
   const { snapshot } = useLiveMatch(initial);
   const s = snapshot.state as CricketState;
   const inn = currentInnings(s);
@@ -27,7 +28,7 @@ export function Featured({ initial, competition, canScore }: { initial: MatchSna
   })();
 
   const slots = inn ? 6 - (inn.legalBalls % 6) : 6;
-  const watch = `/sports/${snapshot.sportKey}/matches/${snapshot.matchId}`;
+  const watch = matchHref({ id: snapshot.matchId, sportKey: snapshot.sportKey, tournamentId });
 
   return (
     <section className="mx-feature" aria-label="Featured live match">
@@ -61,7 +62,7 @@ export function Featured({ initial, competition, canScore }: { initial: MatchSna
         </div>
         <div className="mx-feature-actions">
           <Link href={watch} className="mx-btn mx-btn-lg" data-variant="blue">WATCH LIVE</Link>
-          {canScore && <Link href={`/score/${snapshot.matchId}`} className="mx-btn mx-btn-lg" data-variant="amber">{snapshot.seq === 0 ? 'START MATCH' : 'OPEN SCORER'}</Link>}
+          {canScore && <Link href={scoreHref({ id: snapshot.matchId, sportKey: snapshot.sportKey, tournamentId })} className="mx-btn mx-btn-lg" data-variant="amber">{snapshot.seq === 0 ? 'START MATCH' : 'OPEN SCORER'}</Link>}
           <Link href={watch} className="mx-btn mx-btn-lg" data-variant="gray">SCORECARD</Link>
         </div>
       </div>

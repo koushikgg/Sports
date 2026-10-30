@@ -79,7 +79,7 @@ export function MatchesBoard({
         </div>
       </div>
 
-      {showFeatured && <Featured key={featured.matchId} initial={featured} competition={featuredCompetition} canScore={canScoreMatch(viewer, matches.find((x) => x.id === featured.matchId) ?? { assignedScorerId: null, status: 'live' })} />}
+      {showFeatured && <Featured key={featured.matchId} initial={featured} competition={featuredCompetition} tournamentId={matches.find((x) => x.id === featured.matchId)?.tournamentId} canScore={canScoreMatch(viewer, matches.find((x) => x.id === featured.matchId) ?? { assignedScorerId: null, status: 'live' })} />}
 
       <div className="mx-filters">
         <div className="mx-filter-row">

@@ -23,7 +23,7 @@ export default async function TournamentCreatePage({ params }: { params: Promise
         <div className="cw-denied">
           <h1>Organisers only</h1>
           <p>Creating matches needs an admin account.</p>
-          <Link href={user ? `/tournaments/${id}` : `/login?callbackUrl=/tournaments/${id}/create`} className="mx-btn mx-btn-lg" data-variant="amber">{user ? 'BACK TO TOURNAMENT' : 'SIGN IN'}</Link>
+          <Link href={user ? `/tournaments/${id}` : `/login?callbackUrl=/tournaments/${id}/matches/create`} className="mx-btn mx-btn-lg" data-variant="amber">{user ? 'BACK TO TOURNAMENT' : 'SIGN IN'}</Link>
         </div>
       </RatchShell>
     );

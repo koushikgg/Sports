@@ -14,6 +14,7 @@ import { TeamsTab } from './teams-tab';
 import { sportColor, statusGroup } from '@/components/matches/model';
 import { useHydrated } from '@/components/matches/time';
 import { StandingsTable } from './standings-table';
+import { newMatchHref } from '@/lib/match-href';
 
 type Tab = 'standings' | 'fixtures' | 'teams' | 'managers' | 'bracket' | 'leaders';
 const TABS: [string, Tab][] = [['STANDINGS', 'standings'], ['FIXTURES', 'fixtures'], ['TEAMS', 'teams'], ['MANAGERS', 'managers'], ['BRACKET', 'bracket'], ['LEADERS', 'leaders']];
@@ -69,7 +70,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
           </div>
           <div className="tn-actions">
             {isAdmin && t.meta && venues && <EditTournament id={t.id} name={t.name} visibility={t.visibility} meta={t.meta} cricket={cricket} venues={venues} started={t.started} fixtureCount={t.fixtureCount} teamCount={t.meta.teams.length} />}
-            {isAdmin && cricket && t.meta?.formatKey !== 'lk' && !t.started && <Link href={`/tournaments/${t.id}/create`} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
+            {isAdmin && cricket && t.meta?.formatKey !== 'lk' && !t.started && <Link href={newMatchHref(t.id)} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
           </div>
         </div>
         <div className="tn-kpis">{kpis.map(([k, v]) => <div key={k}><span className="lbl lbl-sm">{k}</span><b>{v}</b></div>)}</div>

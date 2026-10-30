@@ -6,8 +6,9 @@ import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/
 import { addDays, planTournament } from '@sports/sports-engine/src/tournament-plan';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
-import { addTeam, addVenue, createMatchAction, publishTournament } from '@/app/create/actions';
+import { addTeam, addVenue, createMatchAction, publishTournament } from '@/app/tournaments/create/actions';
 import { toast } from '@/components/ratch/toast';
+import { newMatchHref, scoreHref } from '@/lib/match-href';
 
 type Mode = 'tournament' | 'match';
 interface Sport { id: string; key: string; name: string }
@@ -237,7 +238,6 @@ export function Wizard(props: Props) {
   const overrun = mode === 'tournament' && plan.overrun;
 
   const go = (s: number) => { if (s === step) return; setStep(s); setVisited((v) => Math.max(v, s)); setServerError(null); };
-  const switchMode = (next: Mode) => { if (next === mode) return; setMode(next); setStep(0); setVisited(0); setDone(null); setServerError(null); };
 
   // ---- adding things on the fly
   const makeTeam = async () => {
@@ -566,14 +566,9 @@ export function Wizard(props: Props) {
     <>
       <div className="mx-head">
         <div>
-          <span className="lbl">{props.lockedTournament ? props.lockedTournament.name.toUpperCase() : 'ORGANISER · CREATE'}</span>
+          <span className="lbl">{props.lockedTournament ? props.lockedTournament.name.toUpperCase() : 'ORGANISER'}</span>
           <h1>{isT ? 'New tournament' : 'New cricket match'}</h1>
         </div>
-        {!props.lockedTournament && <div className="cw-modes" role="group" aria-label="What to create">
-          {([['TOURNAMENT', 'tournament'], ['CRICKET MATCH', 'match']] as const).map(([l, v]) => (
-            <button key={v} type="button" aria-pressed={mode === v} data-on={mode === v ? 'true' : undefined} onClick={() => switchMode(v)}>{l}</button>
-          ))}
-        </div>}
       </div>
 
       <div className="cw-layout">
@@ -624,12 +619,12 @@ export function Wizard(props: Props) {
                 {done.kind === 'tournament' ? (
                   <>
                     <Link href={`/tournaments/${done.id}`} className="cw-btn" data-variant="blue">VIEW TOURNAMENT</Link>
-                    <Link href={`/tournaments/${done.id}/create`} className="cw-btn" data-variant="gray">CREATE A MATCH</Link>
+                    <Link href={newMatchHref(done.id)} className="cw-btn" data-variant="gray">CREATE A MATCH</Link>
                   </>
                 ) : (
                   <>
                     <Link href={done.tournamentId ? `/tournaments/${done.tournamentId}/matches/${done.id}` : `/sports/cricket/matches/${done.id}`} className="cw-btn" data-variant="blue">VIEW MATCH</Link>
-                    <Link href={`/score/${done.id}`} className="cw-btn" data-variant="amber">OPEN SCORER</Link>
+                    <Link href={scoreHref({ id: done.id, sportKey: 'cricket', tournamentId: done.kind === 'match' ? done.tournamentId : null })} className="cw-btn" data-variant="amber">OPEN SCORER</Link>
                     {props.lockedTournament && <Link href={`/tournaments/${props.lockedTournament.id}`} className="cw-btn" data-variant="gray">BACK TO TOURNAMENT</Link>}
                     <button type="button" className="cw-btn" data-variant="gray" onClick={() => { setDone(null); setStep(0); setVisited(0); setM((x) => ({ ...x, teamAId: '', teamBId: '', lineups: { a: emptyLineup(), b: emptyLineup() } })); }}>CREATE ANOTHER</button>
                   </>

@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `/`, `/matches`, `/tournaments`, `/sports/**`, match pages, `/display/**` | yes | yes | yes |
 | `/teams`, `/players`, `/score`, `/score/[id]` | sign in | yes | yes |
-| `/admin/**`, `/create` | sign in | 403 | yes |
+| `/admin/**`, `/tournaments/create`, `/tournaments/*/matches/create` | sign in | 403 | yes |
 
 - Rules live in one place: `packages/shared/src/access.ts` (`ROUTE_RULES`, `NAV_ITEMS`). The middleware, the top navigation
   and the page guards all read it, and a test checks that every nav link a role sees actually opens for that role.

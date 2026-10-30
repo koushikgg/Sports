@@ -14,6 +14,10 @@ const config: NextConfig = {
   async redirects() {
     return [
       { source: '/admin/matches/:id/score', destination: '/score/:id', permanent: true },
+      // the old create page: one tournament's match wizard, or the tournament wizard
+      { source: '/create', has: [{ type: 'query', key: 'mode', value: 'match' }, { type: 'query', key: 'tournament', value: '(?<t>[0-9a-f-]{36})' }], destination: '/tournaments/:t/matches/create', permanent: false },
+      { source: '/create', destination: '/tournaments/create', permanent: false },
+      { source: '/tournaments/:id/create', destination: '/tournaments/:id/matches/create', permanent: false },
       { source: '/admin/players', destination: '/players', permanent: false },
       { source: '/admin/teams', destination: '/teams', permanent: false },
       { source: '/admin/teams/:id', destination: '/teams/:id', permanent: false },

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FIXTURE_TYPES, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FormatKey, type TournamentMeta } from '@sports/shared';
-import { addVenue } from '@/app/create/actions';
+import { addVenue } from '@/app/tournaments/create/actions';
 import { updateTournament } from '@/app/tournaments/[id]/actions';
 import '@/components/teams/team-manage.css';
 import { toast } from '@/components/ratch/toast';
