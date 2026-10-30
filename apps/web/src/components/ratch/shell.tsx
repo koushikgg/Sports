@@ -8,6 +8,7 @@ import { navFor, type Role } from '@sports/shared';
 import { signOut } from '@/auth';
 import { SignInButton } from './sign-in-button';
 import { Toaster } from './toast';
+import { Progress } from './progress';
 import { UserMenu } from './user-menu';
 import { Suspense } from 'react';
 
@@ -68,6 +69,7 @@ export function RatchShell({
       </header>
       <main id="main" className="rx-main">{children}</main>
       <Toaster />
+      <Progress />
     </div>
   );
 }
