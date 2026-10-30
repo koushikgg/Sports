@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { asc, eq, getDb, sports, teams, venues } from '@sports/db';
-import { getTournamentDetail } from '@sports/scoring';
+import { getTournamentDetail, tournamentAccess } from '@sports/scoring';
 import '@sports/sports-engine/src/all';
 import { ProfileBack } from '@/components/players/player-view';
 import { buildFixturePrompt } from '@sports/sports-engine/src/fixture-import';
@@ -10,20 +10,26 @@ import { RatchShell } from '@/components/ratch/shell';
 import { TournamentPanel } from '@/components/tournaments/detail';
 import '@/components/tournaments/tournaments.css';
 import { getShellUser } from '@/lib/shell-user';
+import { PrivateNotice } from '@/components/ratch/private-notice';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const { user } = await getShellUser();
-  const t = /^[0-9a-f-]{36}$/i.test(id) ? await getTournamentDetail(id, !!user) : null;
-  return { title: t?.name ?? 'Tournament', description: t ? `Standings, fixtures and results for ${t.name}.` : undefined };
+  const t = /^[0-9a-f-]{36}$/i.test(id) ? await getTournamentDetail(id, viewerOf(user)) : null;
+  // a private tournament is never indexed or shared with a preview
+  return { title: t?.name ?? 'Tournament', description: t ? `Standings, fixtures and results for ${t.name}.` : undefined, ...(t?.visibility === 'private' || !t ? { robots: { index: false } } : {}) };
 }
 
 export default async function TournamentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user } = await getShellUser();
-  const t = /^[0-9a-f-]{36}$/i.test(id) ? await getTournamentDetail(id, !!user) : null;
+  const ok = /^[0-9a-f-]{36}$/i.test(id);
+  const access = ok ? await tournamentAccess(id, viewerOf(user)) : 'missing';
+  if (access === 'private') return <PrivateNotice user={user} what="tournament" why="private" backHref="/tournaments" backLabel="ALL TOURNAMENTS" here={`/tournaments/${id}`} active="tournaments" />;
+  const t = ok ? await getTournamentDetail(id, viewerOf(user)) : null;
   if (!t) notFound();
   // teams an admin can still add: same sport, not already entered
   const inside = new Set((t.meta?.teams ?? []).map((x) => x.id));

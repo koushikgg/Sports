@@ -7,13 +7,14 @@ import { CricketScorer } from '@/components/cricket/scorer';
 import { ScorerDebug } from '@/components/scorer-debug';
 import { PageHeader } from '@/components/ui';
 import { getShellUser } from '@/lib/shell-user';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ScorePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user } = await getShellUser();
-  const [snapshot, card] = await Promise.all([getSnapshot(id), getMatchCard(id, true)]);
+  const [snapshot, card] = await Promise.all([getSnapshot(id), getMatchCard(id, viewerOf(user))]);
   if (!snapshot || !card) notFound();
 
   // Role is enforced by the middleware; this adds the per-match rule (assigned scorer, finished matches).

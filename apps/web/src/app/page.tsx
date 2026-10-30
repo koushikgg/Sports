@@ -11,6 +11,7 @@ import { LeaderBoard } from '@/components/sports/leaders';
 import { canScoreMatch } from '@sports/shared';
 import { getAllSports, listMatchCards } from '@/lib/queries';
 import { getShellUser } from '@/lib/shell-user';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -26,11 +27,11 @@ const BAND = {
 
 export default async function Showcase() {
   const { user } = await getShellUser();
-  const signedIn = !!user;
+  const viewer = viewerOf(user);
   const [matches, sports, tournaments] = await Promise.all([
-    listMatchCards({ limit: 200, signedIn }),
+    listMatchCards({ limit: 200, viewer }),
     getAllSports(),
-    listTournaments(signedIn),
+    listTournaments(viewer),
   ]);
 
   const live = matches.filter((m) => statusGroup(m.status) === 'live');

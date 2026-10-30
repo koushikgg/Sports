@@ -10,7 +10,7 @@ import {
   type Ack,
   type SocketTokenClaims,
 } from '@sports/shared';
-import { getSnapshot, releaseMatch, submitScoreEvent } from '@sports/scoring';
+import { getSnapshot, matchAccess, releaseMatch, submitScoreEvent, viewerForUser } from '@sports/scoring';
 import '@sports/sports-engine/src/all';
 
 const port = Number(process.env.REALTIME_PORT ?? 4000);
@@ -52,6 +52,11 @@ io.on('connection', (socket) => {
     const parsed = joinMatchSchema.safeParse(raw);
     if (!parsed.success) return reply(cb, { ok: false, code: 'invalid', message: 'bad matchId' });
     try {
+      // A private tournament's matches are for admins and its managers; a members-only match needs a signed-in socket.
+      const viewer = user ? await viewerForUser(user.sub, user.role) : { signedIn: false };
+      const access = await matchAccess(parsed.data.matchId, viewer);
+      if (access === 'missing') return reply(cb, { ok: false, code: 'not_found', message: 'Match not found' });
+      if (access !== 'ok') return reply(cb, { ok: false, code: 'forbidden', message: access === 'private-tournament' ? 'This match is private' : 'Sign in to see this match' });
       const snapshot = await getSnapshot(parsed.data.matchId);
       if (!snapshot) return reply(cb, { ok: false, code: 'not_found', message: 'Match not found' });
       await socket.join(rooms.match(parsed.data.matchId));

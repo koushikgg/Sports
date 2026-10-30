@@ -81,6 +81,7 @@ export async function publishTournament(input: unknown): Promise<{ ok: true; id:
     .values({
       sportId: sport.id,
       name: v.name,
+      visibility: v.visibility,
       format: FORMATS[v.formatKey].column,
       startsAt: toInstant(v.startDate, '00:00', v.tzOffset),
       endsAt: toInstant(v.endDate, '23:59', v.tzOffset),

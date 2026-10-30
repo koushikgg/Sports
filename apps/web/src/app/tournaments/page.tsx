@@ -7,6 +7,7 @@ import { RatchShell } from '@/components/ratch/shell';
 import { TournamentsBoard } from '@/components/tournaments/board';
 import '@/components/tournaments/tournaments.css';
 import { getShellUser } from '@/lib/shell-user';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Tournaments', description: 'Standings, fixtures and brackets for every tournament.' };
@@ -16,7 +17,7 @@ export default async function TournamentsPage({ searchParams }: { searchParams: 
   // links from before each tournament had its own page
   if (t && /^[0-9a-f-]{36}$/i.test(t)) redirect(`/tournaments/${t}`);
   const { user } = await getShellUser();
-  const list = await listTournaments(!!user);
+  const list = await listTournaments(viewerOf(user));
 
   return (
     <RatchShell active="tournaments" user={user}>

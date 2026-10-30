@@ -303,6 +303,29 @@ export interface MatchCardData {
   summary: ScoreSummary;
 }
 
+/** Who is asking, so a query can leave out what they may not see. A bare `true` means a signed-in member. */
+export interface Viewer {
+  signedIn: boolean;
+  admin?: boolean;
+  /** Tournaments they manage. */
+  managed?: string[];
+}
+type ViewerArg = boolean | Viewer | null | undefined;
+const asViewer = (v: ViewerArg): Viewer => (v && typeof v === 'object' ? v : { signedIn: !!v });
+
+/** Matches of a private tournament are for admins and that tournament's managers only. */
+function tournamentGate(v: Viewer) {
+  if (v.admin) return sql`true`;
+  const managed = v.managed?.length ? sql` and tt.id not in (${sql.join(v.managed.map((m) => sql`${m}::uuid`), sql`, `)})` : sql``;
+  return sql`(${matches.tournamentId} is null or not exists (select 1 from tournaments tt where tt.id = ${matches.tournamentId} and tt.visibility = 'private'${managed}))`;
+}
+
+/** Tournaments a viewer may see: public ones, plus private ones they manage (admins see all). */
+function tournamentVisible(v: Viewer) {
+  if (v.admin) return sql`true`;
+  return v.managed?.length ? sql`(${tournaments.visibility} = 'public' or ${inArray(tournaments.id, v.managed)})` : sql`${tournaments.visibility} = 'public'`;
+}
+
 export interface MatchCardQuery {
   sportKey?: string;
   statuses?: MatchRow['status'][];
@@ -310,6 +333,8 @@ export interface MatchCardQuery {
   tournamentId?: string;
   /** Whether the viewer is signed in: members-only matches are hidden from everyone else. */
   signedIn?: boolean;
+  /** Who is asking. Takes the place of `signedIn` and also hides private tournaments from anyone who does not manage them. */
+  viewer?: Viewer;
   limit?: number;
   /** `upcoming` = soonest first; `recent` (default) = newest first. */
   order?: 'upcoming' | 'recent';
@@ -327,10 +352,13 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
   if (q.matchId) filters.push(eq(matches.id, q.matchId));
   if (q.tournamentId) filters.push(eq(matches.tournamentId, q.tournamentId));
   // public: listed for all. link: reachable by URL only, never listed. private: signed-in members only.
+  // A match in a private tournament is also hidden from everyone but admins and that tournament's managers.
+  const viewer = q.viewer ?? asViewer(q.signedIn);
   filters.push(
     q.matchId
-      ? q.signedIn ? sql`true` : sql`${matches.visibility} <> 'private'`
-      : q.signedIn ? sql`${matches.visibility} in ('public', 'private')` : sql`${matches.visibility} = 'public'`,
+      ? viewer.signedIn ? sql`true` : sql`${matches.visibility} <> 'private'`
+      : viewer.signedIn ? sql`${matches.visibility} in ('public', 'private')` : sql`${matches.visibility} = 'public'`,
+    tournamentGate(viewer),
   );
 
   const rows = await db
@@ -399,8 +427,8 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
   });
 }
 
-export async function getMatchCard(matchId: string, signedIn = false): Promise<MatchCardData | null> {
-  return (await listMatchCards({ matchId, signedIn, limit: 1 }))[0] ?? null;
+export async function getMatchCard(matchId: string, viewer: ViewerArg = false): Promise<MatchCardData | null> {
+  return (await listMatchCards({ matchId, viewer: asViewer(viewer), limit: 1 }))[0] ?? null;
 }
 
 export interface LeaderboardRow extends BoardRow { name: string }
@@ -492,6 +520,8 @@ export async function getCricketLeaders(limit = 5, tournamentId?: string): Promi
 export interface TournamentSummary {
   id: string;
   name: string;
+  /** private: only admins and the tournament's managers can see it. */
+  visibility: 'public' | 'private';
   sportKey: SportKey;
   sportName: string;
   formatKey: FormatKey;
@@ -705,8 +735,37 @@ export interface TournamentDetail extends TournamentSummary {
 
 const DEFAULT_POINTS = { win: 2, tie: 1, noResult: 1 };
 
-function visibilityFilter(signedIn: boolean) {
-  return signedIn ? sql`${matches.visibility} in ('public', 'private')` : sql`${matches.visibility} = 'public'`;
+function visibilityFilter(v: Viewer) {
+  return and(v.signedIn ? sql`${matches.visibility} in ('public', 'private')` : sql`${matches.visibility} = 'public'`, tournamentGate(v))!;
+}
+
+/** Why a viewer cannot open a match, so the page can say so instead of pretending it does not exist. */
+export async function matchAccess(matchId: string, who: ViewerArg): Promise<'ok' | 'private-tournament' | 'members-only' | 'missing'> {
+  const v = asViewer(who);
+  const [row] = await getDb()
+    .select({ visibility: matches.visibility, tournamentId: matches.tournamentId, tVisibility: tournaments.visibility })
+    .from(matches)
+    .leftJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .where(eq(matches.id, matchId))
+    .limit(1);
+  if (!row) return 'missing';
+  if (row.tournamentId && row.tVisibility === 'private' && !v.admin && !v.managed?.includes(row.tournamentId)) return 'private-tournament';
+  if (row.visibility === 'private' && !v.signedIn) return 'members-only';
+  return 'ok';
+}
+
+/** The same for a tournament page. */
+export async function tournamentAccess(id: string, who: ViewerArg): Promise<'ok' | 'private' | 'missing'> {
+  const v = asViewer(who);
+  const [row] = await getDb().select({ visibility: tournaments.visibility }).from(tournaments).where(eq(tournaments.id, id)).limit(1);
+  if (!row) return 'missing';
+  return row.visibility === 'private' && !v.admin && !v.managed?.includes(id) ? 'private' : 'ok';
+}
+
+/** A signed-in person as a Viewer, for the live-score server, which only knows their id and role. */
+export async function viewerForUser(userId: string, role: string): Promise<Viewer> {
+  const mine = await getDb().select({ t: tournamentManagers.tournamentId }).from(tournamentManagers).where(eq(tournamentManagers.userId, userId));
+  return { signedIn: true, admin: role === 'admin', managed: mine.map((m) => m.t) };
 }
 
 function statusOf(t: { startsAt: Date | null; endsAt: Date | null }, c: { created: number; played: number; open: number; active: boolean }, total: number): TournamentSummary['status'] {
@@ -730,6 +789,7 @@ function summarise(
   return {
     id: row.t.id,
     name: row.t.name,
+    visibility: row.t.visibility === 'private' ? 'private' : 'public',
     sportKey: row.sportKey as SportKey,
     sportName: row.sportName,
     formatKey,
@@ -744,32 +804,34 @@ function summarise(
   };
 }
 
-export async function listTournaments(signedIn = false): Promise<TournamentSummary[]> {
+export async function listTournaments(who: ViewerArg = false): Promise<TournamentSummary[]> {
+  const v = asViewer(who);
   const db = getDb();
   const rows = await db
     .select({ t: tournaments, sportKey: sports.key, sportName: sports.name })
     .from(tournaments)
     .innerJoin(sports, eq(sports.id, tournaments.sportId))
-    .where(eq(sports.enabled, true))
+    .where(and(eq(sports.enabled, true), tournamentVisible(v)))
     .orderBy(desc(tournaments.startsAt), desc(tournaments.createdAt));
   if (rows.length === 0) return [];
 
   const counted = await db
     .select({ tournamentId: matches.tournamentId, status: matches.status, n: count() })
     .from(matches)
-    .where(and(inArray(matches.tournamentId, rows.map((r) => r.t.id)), visibilityFilter(signedIn)))
+    .where(and(inArray(matches.tournamentId, rows.map((r) => r.t.id)), visibilityFilter(v)))
     .groupBy(matches.tournamentId, matches.status);
 
   return rows.map((r) => summarise(r, counted.filter((c) => c.tournamentId === r.t.id).map((c) => ({ status: c.status, n: Number(c.n) }))));
 }
 
-export async function getTournamentDetail(id: string, signedIn = false): Promise<TournamentDetail | null> {
+export async function getTournamentDetail(id: string, who: ViewerArg = false): Promise<TournamentDetail | null> {
+  const v = asViewer(who);
   const db = getDb();
   const [row] = await db
     .select({ t: tournaments, sportKey: sports.key, sportName: sports.name })
     .from(tournaments)
     .innerJoin(sports, eq(sports.id, tournaments.sportId))
-    .where(and(eq(tournaments.id, id), eq(sports.enabled, true)))
+    .where(and(eq(tournaments.id, id), eq(sports.enabled, true), tournamentVisible(v)))
     .limit(1);
   if (!row) return null;
 
@@ -784,13 +846,13 @@ export async function getTournamentDetail(id: string, signedIn = false): Promise
   const teamIds = (meta?.teams ?? []).map((t) => t.id);
 
   const [cards, teamRows, finishedRows] = await Promise.all([
-    listMatchCards({ tournamentId: id, signedIn, limit: 500 }),
+    listMatchCards({ tournamentId: id, viewer: v, limit: 500 }),
     teamIds.length ? db.select({ id: teams.id, name: teams.name, shortName: teams.shortName }).from(teams).where(inArray(teams.id, teamIds)) : Promise.resolve([]),
     db
       .select({ match: matches, state: matchStates.state })
       .from(matches)
       .leftJoin(matchStates, eq(matchStates.matchId, matches.id))
-      .where(and(eq(matches.tournamentId, id), eq(matches.status, 'completed'), visibilityFilter(signedIn)))
+      .where(and(eq(matches.tournamentId, id), eq(matches.status, 'completed'), visibilityFilter(v)))
       .orderBy(asc(matches.scheduledAt), asc(matches.createdAt)),
   ]);
 

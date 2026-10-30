@@ -138,6 +138,7 @@ const uuid = z.string().uuid();
 export const tournamentInputSchema = z
   .object({
     name: z.string().trim().min(1, 'Give the tournament a name.').max(80),
+    visibility: z.enum(['public', 'private']).default('public'),
     sportId: uuid,
     startDate: date,
     endDate: date,
@@ -170,6 +171,7 @@ export const tournamentEditSchema = z
   .object({
     tournamentId: uuid,
     name: z.string().trim().min(1, 'Give the tournament a name.').max(80),
+    visibility: z.enum(['public', 'private']).default('public'),
     startDate: date,
     endDate: date,
     venueIds: z.array(uuid).max(50).default([]),
@@ -235,6 +237,9 @@ export interface TournamentMeta {
 }
 
 export const VISIBILITIES = ['public', 'link', 'private'] as const;
+/** A tournament is public, or private: only admins and its managers can see it and its matches. */
+export const TOURNAMENT_VISIBILITIES = ['public', 'private'] as const;
+export type TournamentVisibility = (typeof TOURNAMENT_VISIBILITIES)[number];
 export type Visibility = (typeof VISIBILITIES)[number];
 
 const lineup = z.object({

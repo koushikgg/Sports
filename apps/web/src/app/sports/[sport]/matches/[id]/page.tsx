@@ -4,6 +4,7 @@ import { MatchPageView, matchMetadata } from '@/components/match/match-page';
 import { getMatchCard } from '@/lib/queries';
 import { getShellUser } from '@/lib/shell-user';
 import { matchHref } from '@/lib/match-href';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ export default async function MatchPage({ params }: Props) {
   const { sport, id } = await params;
   // a tournament's match lives under the tournament; old links come here and carry on
   const { user } = await getShellUser();
-  const card = await getMatchCard(id, !!user);
+  const card = await getMatchCard(id, viewerOf(user));
   if (card?.tournamentId) redirect(matchHref(card));
   return <MatchPageView id={id} where={{ sport }} />;
 }

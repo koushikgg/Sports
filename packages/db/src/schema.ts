@@ -106,6 +106,8 @@ export const tournaments = pgTable('tournaments', {
   id: id(),
   sportId: uuid('sport_id').notNull().references(() => sports.id),
   name: text('name').notNull(),
+  /** public: everyone sees it. private: only admins and the tournament's managers see it and its matches. */
+  visibility: text('visibility').notNull().default('public'),
   format: tournamentFormatEnum('format').notNull().default('friendly'),
   startsAt: timestamp('starts_at', { withTimezone: true }),
   endsAt: timestamp('ends_at', { withTimezone: true }),

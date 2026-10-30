@@ -8,6 +8,7 @@ import { RatchShell } from '@/components/ratch/shell';
 import { SportHub } from '@/components/sports/hub';
 import { getEnabledSports, listMatchCards } from '@/lib/queries';
 import { getShellUser } from '@/lib/shell-user';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export default async function SportHubPage({ params }: Props) {
   if (!sport) notFound();
 
   const [matches, leaders] = await Promise.all([
-    listMatchCards({ sportKey: key, limit: 200, signedIn: !!user }),
+    listMatchCards({ sportKey: key, limit: 200, viewer: viewerOf(user) }),
     key === 'cricket' ? getCricketLeaders(5) : null,
   ]);
 

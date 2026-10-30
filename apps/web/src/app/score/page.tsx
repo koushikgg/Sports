@@ -7,13 +7,14 @@ import { ScoreQueue } from '@/components/tournaments/score-queue';
 import '@/components/tournaments/tournaments.css';
 import { listMatchCards } from '@/lib/queries';
 import { getShellUser } from '@/lib/shell-user';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Score', robots: { index: false } };
 
 export default async function ScoreIndex() {
   const { user } = await getShellUser();
-  const all = await listMatchCards({ statuses: ['scheduled', 'live', 'paused'], signedIn: true, limit: 200 });
+  const all = await listMatchCards({ statuses: ['scheduled', 'live', 'paused'], viewer: viewerOf(user), limit: 200 });
   const mine = all
     .filter((m) => canScoreMatch(user, m))
     .sort((a, b) => Number(statusGroup(b.status) === 'live') - Number(statusGroup(a.status) === 'live') || (a.scheduledAt ?? '9999').localeCompare(b.scheduledAt ?? '9999'));

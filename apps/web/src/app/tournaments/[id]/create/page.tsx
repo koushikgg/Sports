@@ -7,6 +7,7 @@ import { Wizard } from '@/components/create/wizard';
 import { RatchShell } from '@/components/ratch/shell';
 import { loadWizardData } from '@/lib/create-data';
 import { getShellUser } from '@/lib/shell-user';
+import { viewerOf } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'New match', robots: { index: false } };
@@ -28,7 +29,7 @@ export default async function TournamentCreatePage({ params }: { params: Promise
     );
   }
 
-  const t = /^[0-9a-f-]{36}$/i.test(id) ? await getTournamentDetail(id, true) : null;
+  const t = /^[0-9a-f-]{36}$/i.test(id) ? await getTournamentDetail(id, viewerOf(user)) : null;
   if (!t) notFound();
   if (t.sportKey !== 'cricket') {
     return (

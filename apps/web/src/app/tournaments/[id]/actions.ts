@@ -162,6 +162,7 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
     .update(tournaments)
     .set({
       name: v.name,
+      visibility: v.visibility,
       format: FORMATS[v.formatKey].column,
       startsAt: toInstant(v.startDate, '00:00', v.tzOffset),
       endsAt: toInstant(v.endDate, '23:59', v.tzOffset),
@@ -183,7 +184,7 @@ export async function updateTournament(raw: unknown): Promise<{ error?: string; 
       .set({ config: sql`${matches.config} || jsonb_build_object('overs', ${overs}::int, 'powerplayOvers', least(coalesce((${matches.config}->>'powerplayOvers')::int, 6), ${overs}::int), 'maxOversPerBowler', ceil(${overs}::numeric / 5)::int)` })
       .where(and(eq(matches.tournamentId, v.tournamentId), eq(matches.status, 'scheduled'), eq(matches.lastSeq, 0)));
   }
-  await audit(admin.id, 'update', 'tournament', v.tournamentId, { formatChanged, cleared });
+  await audit(admin.id, 'update', 'tournament', v.tournamentId, { formatChanged, cleared, visibility: v.visibility });
   refresh(v.tournamentId);
   revalidatePath('/matches');
   return { cleared, regenerated: table && !started && (formatChanged || scheduleChanged) };

@@ -125,7 +125,7 @@ export function Wizard(props: Props) {
   const setAddError = (m: string | null) => { if (m) toast.error(m); };
 
   const [t, setT] = useState({
-    name: '', sportId: cricket?.id ?? sports[0]?.id ?? '', start: '', end: '', venueIds: [] as string[],
+    name: '', visibility: 'public' as 'public' | 'private', sportId: cricket?.id ?? sports[0]?.id ?? '', start: '', end: '', venueIds: [] as string[],
     formatKey: 'lk' as FormatKey, overs: 20, points: { win: 2, tie: 1, noResult: 1 }, qualify: 4 as 2 | 4, perTeam: null as number | null,
     tiebreak: 'NRR' as (typeof TIEBREAKS)[number], teamIds: [] as string[], perDay: 2, firstTime: '18:00', rest: false,
   });
@@ -266,7 +266,7 @@ export function Wizard(props: Props) {
     try {
       if (mode === 'tournament') {
         const r = await publishTournament({
-          name: t.name, sportId: t.sportId, startDate: t.start, endDate: t.end, venueIds: t.venueIds, formatKey: t.formatKey,
+          name: t.name, visibility: t.visibility, sportId: t.sportId, startDate: t.start, endDate: t.end, venueIds: t.venueIds, formatKey: t.formatKey,
           ...(tIsCricket ? { overs: t.overs } : {}), points: t.points, qualify: t.qualify, ...(perTeam ? { matchesPerTeam: perTeam } : {}), tiebreak: t.tiebreak, teamIds: t.teamIds,
           schedule: { perDay: t.perDay, firstMatchTime: t.firstTime, restDay: t.rest }, tzOffset,
         });
@@ -299,7 +299,7 @@ export function Wizard(props: Props) {
   const venueName = (id: string) => venueList.find((x) => x.id === id)?.name ?? '';
   const review: [string, string, number][] = isT
     ? [
-        ['NAME', t.name || '—', 0], ['SPORT', tSport?.name ?? '—', 0], ['DATES', `${fmtD(t.start)} – ${fmtD(t.end)}`, 0], ['VENUES', t.venueIds.map(venueName).join(', ') || 'None yet', 0],
+        ['NAME', t.name || '—', 0], ['SPORT', tSport?.name ?? '—', 0], ['DATES', `${fmtD(t.start)} – ${fmtD(t.end)}`, 0], ['VENUES', t.venueIds.map(venueName).join(', ') || 'None yet', 0], ['WHO CAN SEE IT', t.visibility === 'private' ? 'Private: admins and managers only' : 'Public: everyone', 0],
         ['FORMAT', `${FORMATS[t.formatKey].label}${tIsCricket ? ` · ${t.overs} overs` : ''}${t.formatKey === 'lk' ? ` · top ${t.qualify} qualify` : ''}`, 1],
         ['POINTS', `Win ${t.points.win} · Tie ${t.points.tie} · No result ${t.points.noResult} · Tiebreak ${t.tiebreak}`, 1],
         ['TEAMS', t.teamIds.map((id) => teamById(id)?.name).filter(Boolean).join(', ') || '—', 2],
@@ -331,6 +331,10 @@ export function Wizard(props: Props) {
         <div className="cw-two">
           <Field label="STARTS"><input type="date" className="cw-input" value={t.start} onChange={(e) => setT({ ...t, start: e.target.value })} /></Field>
           <Field label="ENDS"><input type="date" className="cw-input" value={t.end} min={t.start} onChange={(e) => setT({ ...t, end: e.target.value })} /></Field>
+        </div>
+        <div className="cw-block"><Label>WHO CAN SEE IT</Label>
+          <Pills value={t.visibility} onPick={(v) => setT({ ...t, visibility: v })} options={[{ v: 'public' as const, l: 'PUBLIC' }, { v: 'private' as const, l: 'PRIVATE' }]} />
+          <p className="cw-muted">{t.visibility === 'private' ? 'Only admins and the managers you add can see this tournament and its matches. Viewers do not see it in any list. Player stats still count its results.' : 'Everyone can see this tournament and its matches.'}</p>
         </div>
         <div className="cw-block"><Label>VENUES · OPTIONAL</Label>
           {venueList.length === 0 && <p className="cw-muted">No venues yet. You can add one below, or skip it and name a venue on each match later.</p>}

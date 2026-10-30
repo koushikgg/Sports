@@ -43,7 +43,10 @@ export function TournamentsBoard({ list }: { list: TournamentSummary[] }) {
               <Link key={t.id} href={`/tournaments/${t.id}`} className="tn-card" style={{ ['--tn' as string]: c }}>
                 <div className="cw-row-between">
                   <span className="cw-sportline"><span className="mx-group-icon" style={{ background: `color-mix(in srgb, ${c} 16%, transparent)` }}><i style={{ background: c }} /></span><span className="lbl">{t.sportName.toUpperCase()}</span></span>
-                  <span className="mx-badge" data-tone={tone}><i />{label}</span>
+                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {t.visibility === 'private' && <span className="lbl" style={{ color: 'var(--amber)' }} title="Only admins and this tournament’s managers can see it"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ marginRight: 4, verticalAlign: '-1px' }}><rect x="4" y="10" width="16" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>PRIVATE</span>}
+                    <span className="mx-badge" data-tone={tone}><i />{label}</span>
+                  </span>
                 </div>
                 <div><b className="tn-name">{t.name}</b><small>{t.formatLabel} · {t.teamCount} teams</small></div>
                 <div>

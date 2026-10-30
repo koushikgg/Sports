@@ -13,13 +13,13 @@ const box: React.CSSProperties = { display: 'grid', gap: 6 };
 const row: React.CSSProperties = { display: 'flex', gap: 6, flexWrap: 'wrap' };
 
 /** Admin's editor for a saved tournament's settings. Format, qualifiers, overs and the daily schedule lock once play starts. */
-export function EditTournament({ id, name, meta, cricket, venues: allVenues, started, fixtureCount, teamCount }: {
-  id: string; name: string; meta: TournamentMeta; cricket: boolean; venues: { id: string; name: string }[]; started: boolean; fixtureCount: number; teamCount: number;
+export function EditTournament({ id, name, visibility, meta, cricket, venues: allVenues, started, fixtureCount, teamCount }: {
+  id: string; name: string; visibility: 'public' | 'private'; meta: TournamentMeta; cricket: boolean; venues: { id: string; name: string }[]; started: boolean; fixtureCount: number; teamCount: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const init = () => ({
-    name, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate, venueIds: meta.venues.map((v) => v.id).filter((vid) => allVenues.some((v) => v.id === vid)), formatKey: meta.formatKey as FormatKey,
+    name, visibility, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate, venueIds: meta.venues.map((v) => v.id).filter((vid) => allVenues.some((v) => v.id === vid)), formatKey: meta.formatKey as FormatKey,
     perTeam: fitMatchesPerTeam(teamCount, meta.matchesPerTeam) ?? Math.max(1, teamCount - 1), overs: meta.overs ?? 20, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
     perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime, restDay: meta.schedule.restDay,
   });
@@ -57,7 +57,7 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
     setBusy(true); setError(null);
     try {
       const r = await updateTournament({
-        tournamentId: id, name: f.name, startDate: f.startDate, endDate: f.endDate, venueIds: f.venueIds, formatKey: f.formatKey, ...(cricket ? { overs: f.overs } : {}),
+        tournamentId: id, name: f.name, visibility: f.visibility, startDate: f.startDate, endDate: f.endDate, venueIds: f.venueIds, formatKey: f.formatKey, ...(cricket ? { overs: f.overs } : {}),
         points: f.points, qualify: f.qualify, ...(table && wantPerTeam ? { matchesPerTeam: wantPerTeam } : {}), tiebreak: f.tiebreak, schedule: { perDay: f.perDay, firstMatchTime: f.firstMatchTime, restDay: f.restDay }, tzOffset: new Date().getTimezoneOffset(),
       });
       if (r.error) { setError(r.error); return; }
@@ -77,6 +77,13 @@ export function EditTournament({ id, name, meta, cricket, venues: allVenues, sta
             {started && <p>The tournament has started, so the fixture type, how many play on, the matches per team, the overs and the daily schedule are locked. Everything else can still change.</p>}
 
             <label><span className="lbl">NAME</span><input value={f.name} maxLength={80} onChange={(e) => set('name', e.target.value)} /></label>
+            <div style={box}>
+              <span className="lbl">WHO CAN SEE IT</span>
+              <div style={row}>
+                {(['public', 'private'] as const).map((v) => <button key={v} type="button" aria-pressed={f.visibility === v} className="tm-btn" style={pill(f.visibility === v)} onClick={() => set('visibility', v)}>{v.toUpperCase()}</button>)}
+              </div>
+              <p style={f.visibility !== visibility && f.visibility === 'private' ? { color: 'var(--amber)' } : undefined}>{f.visibility === 'private' ? 'Only admins and this tournament’s managers can see it and its matches. Viewers can’t see it in any list, and a link to it says it is private. Player stats still count its results.' : 'Everyone can see this tournament and its matches.'}</p>
+            </div>
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
               <label><span className="lbl">STARTS</span><input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} /></label>
               <label><span className="lbl">ENDS</span><input type="date" value={f.endDate} onChange={(e) => set('endDate', e.target.value)} /></label>

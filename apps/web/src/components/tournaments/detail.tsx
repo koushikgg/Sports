@@ -64,11 +64,11 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
       <div className="tn-hero">
         <div className="tn-hero-top">
           <div>
-            <div className="tn-meta"><span style={{ color }} className="lbl">{t.sportName.toUpperCase()}</span><span className="lbl">{t.formatLabel}{t.venues.length ? ` · ${t.venues.join(' & ')}` : ''}</span></div>
+            <div className="tn-meta"><span style={{ color }} className="lbl">{t.sportName.toUpperCase()}</span><span className="lbl">{t.formatLabel}{t.venues.length ? ` · ${t.venues.join(' & ')}` : ''}</span>{t.visibility === 'private' && <span className="lbl" style={{ color: 'var(--amber)' }} title="Only admins and this tournament’s managers can see it"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ marginRight: 4, verticalAlign: '-1px' }}><rect x="4" y="10" width="16" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>PRIVATE</span>}</div>
             <h2>{t.name}</h2>
           </div>
           <div className="tn-actions">
-            {isAdmin && t.meta && venues && <EditTournament id={t.id} name={t.name} meta={t.meta} cricket={cricket} venues={venues} started={t.started} fixtureCount={t.fixtureCount} teamCount={t.meta.teams.length} />}
+            {isAdmin && t.meta && venues && <EditTournament id={t.id} name={t.name} visibility={t.visibility} meta={t.meta} cricket={cricket} venues={venues} started={t.started} fixtureCount={t.fixtureCount} teamCount={t.meta.teams.length} />}
             {isAdmin && cricket && t.meta?.formatKey !== 'lk' && !t.started && <Link href={`/tournaments/${t.id}/create`} className="mx-btn mx-btn-lg" data-variant="amber">CREATE A MATCH</Link>}
           </div>
         </div>
