@@ -29,6 +29,7 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 - [ ] **Offline scoring queue**: the design promises balls are saved on the device and sync later. Today scoring pauses when offline (no data is lost, but nothing is queued).
 - [ ] **Optimistic updates**: a ball appears after the server confirms (~0.6s, shows "SAVING…"). The design implies it appears instantly.
 - [ ] **Free hit after a no-ball**: mentioned in the design copy; the engine does not enforce it.
+- [x] **Overs per match.** EDIT MATCH on a match (admins, tournament managers) can change its overs (1 to 50) with the time and venue, until the first event. Powerplay and the bowler cap follow unless set by hand. Not changeable after the toss.
 - [x] **Edit the toss** until the first ball (from the openers step, the scoring screen header, or More actions). If openers were already picked they are cleared. [ ] **Change bowler mid-over** and **edit openers** still use Undo.
 - [x] **Tournament managers.** An admin adds managers to a tournament (MANAGERS tab). Managers score that tournament's matches and edit match time and venue; only admins edit the rest (settings, teams, fixtures, managers); everyone else is a viewer. In a tournament, ordinary scorers can only score a match assigned to them. Matches outside a tournament keep the older rule (any scorer unless assigned elsewhere).
 - [ ] **Abandoned** option in the end-match sheet: set it from the admin match page status for now.

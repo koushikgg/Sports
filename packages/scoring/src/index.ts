@@ -95,7 +95,8 @@ const contextCache = new Map<string, { at: number; value: Loaded }>();
 
 async function getContext(db: Reader, match: MatchRow): Promise<Loaded> {
   const hit = contextCache.get(match.id);
-  if (hit && Date.now() - hit.at < CONTEXT_TTL_MS) return hit.value;
+  // before the first event the organiser may still be changing the rules (overs), so do not trust the cache
+  if (hit && match.lastSeq > 0 && Date.now() - hit.at < CONTEXT_TTL_MS) return hit.value;
   const value = await loadContext(db, match);
   contextCache.set(match.id, { at: Date.now(), value });
   if (contextCache.size > 200) contextCache.delete(contextCache.keys().next().value!);
@@ -302,6 +303,8 @@ export interface MatchCardData {
   round: string | null;
   /** The fixture number it was made from (imported fixtures), to order matches that start together. */
   fixtureNo: number | null;
+  /** Overs per innings (cricket), as set for this match. */
+  overs: number | null;
   summary: ScoreSummary;
 }
 
@@ -425,6 +428,7 @@ export async function listMatchCards(q: MatchCardQuery = {}): Promise<MatchCardD
       visibility: r.match.visibility as MatchCardData['visibility'],
       round: ((r.match.meta as { round?: unknown } | null)?.round as string | undefined) ?? null,
       fixtureNo: Number.isInteger((r.match.meta as { fixtureNo?: unknown } | null)?.fixtureNo) ? ((r.match.meta as { fixtureNo: number }).fixtureNo) : null,
+      overs: Number.isInteger((r.match.config as { overs?: unknown } | null)?.overs) ? Number((r.match.config as { overs: number }).overs) : null,
       summary: engine.summary(state, ctx),
     };
   });

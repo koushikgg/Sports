@@ -210,11 +210,11 @@ export function MatchHeader({ card, sportName, canScore, scheduleVenues }: { car
       </nav>
       <div className="mp-title">
         <div>
-          <span className="lbl"><LocalTime iso={card.scheduledAt} fallback="TIME TO BE CONFIRMED" /></span>
+          <span className="lbl"><LocalTime iso={card.scheduledAt} fallback="TIME TO BE CONFIRMED" />{card.overs ? ` · ${card.overs} OVERS` : ''}</span>
           <h1>{card.teamA} <span>vs</span> {card.teamB}</h1>
         </div>
         <div className="mp-actions">
-          {scheduleVenues && card.status === 'scheduled' && card.seq === 0 && <EditMatchSchedule matchId={card.id} scheduledAt={card.scheduledAt} venue={card.venue} venues={scheduleVenues} />}
+          {scheduleVenues && card.status === 'scheduled' && card.seq === 0 && <EditMatchSchedule matchId={card.id} scheduledAt={card.scheduledAt} venue={card.venue} venues={scheduleVenues} overs={card.overs} />}
           {canScore && !finished && <Link href={scoreHref(card)} className="mx-btn mx-btn-lg" data-variant="amber">{card.seq === 0 ? 'START MATCH' : 'OPEN SCORER'}</Link>}
           <Link href={displayHref(card)} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE ↗</Link>
         </div>

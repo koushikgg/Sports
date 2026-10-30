@@ -14,7 +14,7 @@ const when = z.object({
 });
 const validDate = (s: string) => { const [y, m, d] = s.split('-').map(Number) as [number, number, number]; const t = new Date(Date.UTC(y, m - 1, d)); return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d; };
 
-const STARTED = 'The match has started, so its time and venue are locked.';
+const STARTED = 'The match has started, so its time, venue and overs are locked.';
 
 /** A knockout match must be played after the matches that feed it, and before the ones it feeds. */
 function orderError(bracket: BracketFixture[], no: number, date: string, time: string): string | null {
@@ -37,7 +37,7 @@ function orderError(bracket: BracketFixture[], no: number, date: string, time: s
 /** Admins, and the managers of the match's tournament. Changes when and where a match that has not started is played. */
 export async function updateMatchSchedule(raw: unknown): Promise<{ error?: string }> {
   const admin = await requireRole('admin', 'scorer');
-  const p = z.object({ matchId: z.string().uuid() }).and(when).safeParse(raw);
+  const p = z.object({ matchId: z.string().uuid(), overs: z.number({ message: 'Overs must be a whole number from 1 to 50.' }).int('Overs must be a whole number from 1 to 50.').min(1, 'A match needs at least 1 over.').max(50, 'Overs can be at most 50.').optional() }).and(when).safeParse(raw);
   if (!p.success) return { error: p.error.issues[0]?.message ?? 'Check the form.' };
   const { matchId, date, time, tzOffset } = p.data;
   const venue = p.data.venue?.trim() || null;
@@ -75,12 +75,21 @@ export async function updateMatchSchedule(raw: unknown): Promise<{ error?: strin
     if (bad) return { error: bad };
   }
 
-  await db.update(matches).set({ scheduledAt: at, venue }).where(eq(matches.id, matchId));
+  // overs: the rules that follow from it (powerplay, bowler cap) stay in step unless the organiser had set them by hand
+  const cfg = (m.config ?? {}) as Record<string, unknown>;
+  const oldOvers = Number(cfg.overs ?? 0);
+  let config: Record<string, unknown> | undefined;
+  if (p.data.overs !== undefined && p.data.overs !== oldOvers) {
+    const n = p.data.overs;
+    const follow = (key: string, was: number, now: number) => (cfg[key] === undefined ? {} : { [key]: Number(cfg[key]) === was ? now : Math.min(Number(cfg[key]), n) });
+    config = { ...cfg, overs: n, ...follow('powerplayOvers', Math.min(6, oldOvers), Math.min(6, n)), ...follow('maxOversPerBowler', Math.ceil(oldOvers / 5), Math.ceil(n / 5)) };
+  }
+  await db.update(matches).set({ scheduledAt: at, venue, ...(config ? { config } : {}) }).where(eq(matches.id, matchId));
   if (m.tournamentId && meta?.bracket) {
     const bracket = meta.bracket.map((f) => (f.no === fixtureNo ? { ...f, date, time, venue, tz: tzOffset } : f));
     await db.update(tournaments).set({ meta: { ...meta, bracket } as unknown as Record<string, unknown> }).where(eq(tournaments.id, m.tournamentId));
   }
-  await audit(admin.id, 'reschedule', 'match', matchId, { date, time, venue });
+  await audit(admin.id, 'reschedule', 'match', matchId, { date, time, venue, ...(config ? { overs: p.data.overs, was: oldOvers } : {}) });
   if (m.tournamentId) { revalidatePath(`/tournaments/${m.tournamentId}`); revalidatePath(`/tournaments/${m.tournamentId}/matches/${matchId}`); }
   revalidatePath('/matches');
   return {};

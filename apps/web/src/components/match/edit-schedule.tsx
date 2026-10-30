@@ -5,7 +5,7 @@ import { updateMatchSchedule, updatePendingFixture } from '@/app/schedule-action
 import '@/components/teams/team-manage.css';
 import { toast } from '@/components/ratch/toast';
 
-type Value = { date: string; time: string; venue: string };
+type Value = { date: string; time: string; venue: string; overs?: number };
 const pad = (n: number) => String(n).padStart(2, '0');
 /** An instant as the viewer's own date and time, which is how the organiser picked it. */
 export const localParts = (iso: string | null): { date: string; time: string } => {
@@ -13,12 +13,13 @@ export const localParts = (iso: string | null): { date: string; time: string } =
   return d && !Number.isNaN(d.getTime()) ? { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` } : { date: '', time: '18:00' };
 };
 
-function Dialog({ title, initial, venues, save, onClose }: { title: string; initial: Value; venues: string[]; save: (v: Value & { tzOffset: number }) => Promise<{ error?: string }>; onClose: () => void }) {
+function Dialog({ title, initial, venues, save, onClose, withOvers }: { title: string; initial: Value; withOvers?: boolean; venues: string[]; save: (v: Value & { tzOffset: number }) => Promise<{ error?: string }>; onClose: () => void }) {
   const listId = useId();
   const [v, setV] = useState(initial);
   const [busy, setBusy] = useState(false);
   const setError = (m: string | null) => { if (m) toast.error(m); };
-  const dirty = v.date !== initial.date || v.time !== initial.time || v.venue.trim() !== initial.venue.trim();
+  const oversOk = !withOvers || (Number.isInteger(v.overs) && v.overs! >= 1 && v.overs! <= 50);
+  const dirty = v.date !== initial.date || v.time !== initial.time || v.venue.trim() !== initial.venue.trim() || (withOvers && v.overs !== initial.overs);
   const submit = async () => {
     setBusy(true); setError(null);
     try {
@@ -28,7 +29,7 @@ function Dialog({ title, initial, venues, save, onClose }: { title: string; init
   };
   return (
     <div className="tm-modal" onClick={onClose}>
-      <form className="tm-dialog" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (dirty && v.date && v.time) void submit(); }}>
+      <form className="tm-dialog" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (dirty && v.date && v.time && oversOk) void submit(); }}>
         <h2>{title}</h2>
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
           <label><span className="lbl">DATE</span><input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></label>
@@ -39,10 +40,16 @@ function Dialog({ title, initial, venues, save, onClose }: { title: string; init
           <input list={listId} value={v.venue} maxLength={80} placeholder="Where it is played" onChange={(e) => setV({ ...v, venue: e.target.value })} />
           <datalist id={listId}>{venues.map((x) => <option key={x} value={x} />)}</datalist>
         </label>
-        <p>Pick a venue from the list or type a new one. A team can’t be given two matches at the same time.</p>
+        {withOvers && (
+          <label>
+            <span className="lbl">OVERS PER INNINGS</span>
+            <input type="number" inputMode="numeric" min={1} max={50} step={1} value={v.overs ?? ''} onChange={(e) => setV({ ...v, overs: e.target.value === '' ? undefined : Number(e.target.value) })} />
+          </label>
+        )}
+        <p>Pick a venue from the list or type a new one. A team can’t be given two matches at the same time.{withOvers ? ' Overs (1 to 50) apply to this match only and can be changed until its first ball.' : ''}</p>
         <div className="tm-acts">
           <button type="button" className="tm-btn" onClick={onClose}>CANCEL</button>
-          <button type="submit" className="tm-btn" data-v="amber" disabled={!dirty || !v.date || !v.time || busy}>{busy ? 'SAVING…' : 'SAVE'}</button>
+          <button type="submit" className="tm-btn" data-v="amber" disabled={!dirty || !v.date || !v.time || !oversOk || busy}>{busy ? 'SAVING…' : 'SAVE'}</button>
         </div>
       </form>
     </div>
@@ -50,7 +57,7 @@ function Dialog({ title, initial, venues, save, onClose }: { title: string; init
 }
 
 /** Admin's EDIT on a match that has not started: change its time and venue. */
-export function EditMatchSchedule({ matchId, scheduledAt, venue, venues, label = 'EDIT TIME & VENUE', small }: { matchId: string; scheduledAt: string | null; venue: string | null; venues: string[]; label?: string; small?: boolean }) {
+export function EditMatchSchedule({ matchId, scheduledAt, venue, venues, overs, label = 'EDIT MATCH', small }: { matchId: string; scheduledAt: string | null; venue: string | null; venues: string[]; overs?: number | null; label?: string; small?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   return (
@@ -58,8 +65,8 @@ export function EditMatchSchedule({ matchId, scheduledAt, venue, venues, label =
       <button type="button" className={small ? 'mx-btn' : 'mx-btn mx-btn-lg'} data-variant="gray" onClick={() => setOpen(true)}>{label}</button>
       {open && (
         <Dialog
-          title="Edit time and venue" venues={venues} onClose={() => setOpen(false)}
-          initial={{ ...localParts(scheduledAt), venue: venue ?? '' }}
+          title="Edit match" venues={venues} onClose={() => setOpen(false)} withOvers={overs != null}
+          initial={{ ...localParts(scheduledAt), venue: venue ?? '', ...(overs != null ? { overs } : {}) }}
           save={async (v) => { const r = await updateMatchSchedule({ matchId, ...v }); if (!r.error) router.refresh(); return r; }}
         />
       )}

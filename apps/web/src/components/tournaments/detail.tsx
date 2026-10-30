@@ -144,7 +144,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
                         <span className="tn-score">{g === 'up' || !started ? time : `${(sa ?? '').split(' ')[0]} – ${(sb ?? '').split(' ')[0]}`}</span>
                         <b data-dim={m.winner === 'a' ? 'true' : undefined}>{m.teamB}</b>
                         <span style={{ display: 'flex', gap: 8, alignItems: 'center', justifySelf: 'end' }}>
-                          {(isAdmin || canEditMatches) && m.status === 'scheduled' && m.seq === 0 && <EditMatchSchedule matchId={m.id} scheduledAt={m.scheduledAt} venue={m.venue} venues={venueNames} label="EDIT" small />}
+                          {(isAdmin || canEditMatches) && m.status === 'scheduled' && m.seq === 0 && <EditMatchSchedule matchId={m.id} scheduledAt={m.scheduledAt} venue={m.venue} venues={venueNames} overs={m.overs} label="EDIT" small />}
                                                   <Link href={`/tournaments/${t.id}/matches/${m.id}`} className="mx-btn" data-variant={g === 'live' ? 'blue' : 'gray'}>{g === 'live' ? 'WATCH' : g === 'up' ? 'DETAILS' : 'SCORECARD'}</Link>
                         </span>
                       </div>
