@@ -52,7 +52,7 @@ export function TeamsTab({ tournamentId, teams: serverTeams, candidates: serverC
         <div className="tm-panel" style={{ zIndex: 5 }}>
           <div className="tm-search">
             <div className="tm-field">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
               <input type="search" autoComplete="off" value={q} placeholder={`Add a team — search ${sportName.toLowerCase()} teams or type a new name`} aria-label="Add a team" onChange={(e) => setQ(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} />
             </div>
             {focus && term && (

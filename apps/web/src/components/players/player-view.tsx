@@ -1,19 +1,22 @@
 import { roleLabel } from '@/lib/player-role';
 import { matchHref } from '@/lib/match-href';
 import Link from 'next/link';
+import { ArrowLeft } from '@/components/ratch/icons';
 import { Avatar } from '@/components/ratch/avatar';
 import { bowlText, summarize, type PlayerProfile } from '@/lib/player-stats';
 import './profile.css';
 
 const stack = (i: number, n: number) => (n === 1 ? '20px' : i === 0 ? '20px 20px 6px 6px' : i === n - 1 ? '6px 6px 20px 20px' : '6px');
 const BackArrow = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></svg>
+  <ArrowLeft size={26} />
 );
 export const ProfileBack = ({ href, label }: { href: string; label: string }) => <Link href={href} className="pf-back"><BackArrow />{label}</Link>;
 
 /** The player page from the design: identity, sport tabs, headline numbers and the match list. `identity` replaces the default name block (the My profile editor uses it). */
 export function PlayerView({ profile, sport, basePath, identity }: { profile: PlayerProfile; sport?: string; basePath: string; identity?: React.ReactNode }) {
-  const sports = [...new Map(profile.matches.map((m) => [m.sportKey, m.sport])).entries()].map(([key, name]) => ({ key, name, n: profile.matches.filter((m) => m.sportKey === key).length }));
+  // every sport that is switched on has a tab, with how many matches the player has in it
+  const known = new Map<string, string>([...profile.sports.map((s) => [s.key, s.name] as const), ...profile.matches.map((m) => [m.sportKey, m.sport] as const)]);
+  const sports = [...known.entries()].map(([key, name]) => ({ key, name, n: profile.matches.filter((m) => m.sportKey === key).length })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   const active = sports.find((s) => s.key === sport)?.key ?? sports[0]?.key ?? 'cricket';
   const list = profile.matches.filter((m) => m.sportKey === active);
   const { groups } = summarize(active, list);
@@ -67,9 +70,9 @@ export function PlayerView({ profile, sport, basePath, identity }: { profile: Pl
             <span className="pf-vs"><b>{m.team} vs {m.opp}</b><small>{m.comp}</small></span>
             <span className="pf-score">{m.score || '—'}</span>
             <span className="pf-line">
-              {m.bat ? <span>{m.bat.runs}{m.bat.notOut ? '*' : ''} ({m.bat.balls})</span> : <span style={{ color: 'var(--text-tertiary)' }}>DNB</span>}
-              {m.bowl && <small>{bowlText(m.bowl)}</small>}
-              {m.catches > 0 && <small>{m.catches} {m.catches === 1 ? 'CATCH' : 'CATCHES'}</small>}
+              {m.foos ? <><span>{m.foos.goals} {m.foos.goals === 1 ? 'GOAL' : 'GOALS'}</span>{m.foos.own > 0 && <small>{m.foos.own} OWN {m.foos.own === 1 ? 'GOAL' : 'GOALS'}</small>}</> : m.bat ? <span>{m.bat.runs}{m.bat.notOut ? '*' : ''} ({m.bat.balls})</span> : <span style={{ color: 'var(--text-tertiary)' }}>DNB</span>}
+              {!m.foos && m.bowl && <small>{bowlText(m.bowl)}</small>}
+              {!m.foos && m.catches > 0 && <small>{m.catches} {m.catches === 1 ? 'CATCH' : 'CATCHES'}</small>}
             </span>
           </Link>
         ))}

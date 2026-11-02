@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { decide, replay, type LoggedEvent, type MatchContext, type SportEvent } from './index';
-import { foosballEngine as engine, foosballRules, gameWinner, totalGoals, type FoosballState } from './foosball';
+import { foosballEngine as engine, foosballRules, gameWinner, playerGoals, totalGoals, type FoosballState } from './foosball';
+import { computeFoosballBoards } from './foosball-leaders';
 import { computeStandings } from './standings';
 
-const ctxOf = (config: Record<string, unknown>): MatchContext => ({ matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], config });
+const ctxOf = (config: Record<string, unknown>): MatchContext => ({ matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], config: { requirePlayers: false, ...config } });
 const goal = (side: 'a' | 'b'): SportEvent => ({ type: 'goal', payload: { side } });
 const goals = (side: 'a' | 'b', n: number) => Array.from({ length: n }, () => goal(side));
 
@@ -37,7 +38,7 @@ describe('a best-of-3 match to 5', () => {
   const ctx = ctxOf({ firstTo: 5, bestOf: 3 });
   it('starts game 1 at 0–0', () => {
     const { state } = play(ctx, []);
-    expect(state.games).toEqual([{ a: 0, b: 0, done: false, winner: null }]);
+    expect(state.games).toEqual([{ a: 0, b: 0, done: false, winner: null, scorers: [] }]);
     expect(engine.summary(state, ctx).status).toBe('Best of 3 · first to 5');
   });
   it('moves to the next game when one is won, and ends at two games', () => {
@@ -60,7 +61,7 @@ describe('a best-of-3 match to 5', () => {
   it('undo takes a goal back, even the one that won a game', () => {
     const { log } = play(ctx, goals('a', 5));
     const u = decide(engine, ctx, log, { type: 'undo', payload: {} });
-    expect(u.ok && (u.value.state as FoosballState).games).toEqual([{ a: 4, b: 0, done: false, winner: null }]);
+    expect(u.ok && (u.value.state as FoosballState).games).toEqual([{ a: 4, b: 0, done: false, winner: null, scorers: [{ side: 'a', playerId: null, own: false }, { side: 'a', playerId: null, own: false }, { side: 'a', playerId: null, own: false }, { side: 'a', playerId: null, own: false }] }]);
     expect(u.ok && (u.value.state as FoosballState).gamesWon).toEqual({ a: 0, b: 0 });
   });
   it('shows the live score in the summary', () => {
@@ -102,5 +103,122 @@ describe('standings with goals', () => {
       { teamAId: 'C', teamBId: 'B', winnerTeamId: 'C', outcome: 'win', goals: { C: { for: 5, against: 4 }, B: { for: 4, against: 5 } } },
     ], { win: 1, tie: 0, noResult: 0 }, 'DIFFERENCE');
     expect(rows.map((r) => [r.teamId, r.points, r.diff])).toEqual([['A', 1, 5], ['C', 1, 1], ['B', 0, -6]]);
+  });
+});
+
+describe('goals by player', () => {
+  const ctxP: MatchContext = { matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], players: { A: [{ id: 'a1', name: 'Asha' }, { id: 'a2', name: 'Arun' }], B: [{ id: 'b1', name: 'Bela' }] }, config: { firstTo: 3, bestOf: 1 } };
+  const g = (side: 'a' | 'b', playerId?: string, own?: boolean): SportEvent => ({ type: 'goal', payload: { side, ...(playerId ? { playerId } : {}), ...(own ? { own } : {}) } });
+
+  it('credits a goal to its scorer and counts unnamed goals', () => {
+    const { state } = play(ctxP, [g('a', 'a1'), g('a', 'a1'), g('b', 'b1'), g('a')]);
+    expect(state.games[0]!.scorers).toEqual([{ side: 'a', playerId: 'a1', own: false }, { side: 'a', playerId: 'a1', own: false }, { side: 'b', playerId: 'b1', own: false }, { side: 'a', playerId: null, own: false }]);
+    expect(playerGoals(state)).toEqual({ a1: { goals: 2, own: 0 }, b1: { goals: 1, own: 0 } });
+    expect(state.result?.winnerTeamId).toBe('A');
+  });
+  it('an own goal scores for the other side and is credited against the player', () => {
+    const { state } = play(ctxP, [g('a', 'b1', true)]);
+    expect(state.games[0]).toMatchObject({ a: 1, b: 0 });
+    expect(playerGoals(state)).toEqual({ b1: { goals: 0, own: 1 } });
+  });
+  it('rejects a scorer who is not in the right team, and an own goal with nobody named', () => {
+    const { log } = play(ctxP, []);
+    expect(decide(engine, ctxP, log, g('a', 'b1')).ok).toBe(false);
+    expect(decide(engine, ctxP, log, g('b', 'a1')).ok).toBe(false);
+    expect(decide(engine, ctxP, log, g('a', 'a1', true)).ok).toBe(false);
+    expect(decide(engine, ctxP, log, g('a', undefined, true)).ok).toBe(false);
+    expect(decide(engine, ctxP, log, g('a', 'ghost')).ok).toBe(false);
+    expect(decide(engine, ctxP, log, g('a', 'a2')).ok).toBe(true);
+  });
+  it('undo removes the scorer with the goal and goals stay with their game', () => {
+    const { log } = play(ctxP, [g('a', 'a1'), g('a', 'a1')]);
+    const u = decide(engine, ctxP, log, { type: 'undo', payload: {} });
+    expect(u.ok && playerGoals(u.value.state as FoosballState)).toEqual({ a1: { goals: 1, own: 0 } });
+    const two = play({ ...ctxP, config: { firstTo: 2, bestOf: 3 } }, [g('a', 'a1'), g('a', 'a2'), g('b', 'b1')]).state;
+    expect(two.games.map((x) => x.scorers.length)).toEqual([2, 1]);
+  });
+});
+
+describe('foosball leaderboards', () => {
+  it('ranks scorers and shares a place when level', () => {
+    const mk = (events: SportEvent[]) => play({ matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], players: { A: [{ id: 'a1', name: 'x' }, { id: 'a2', name: 'y' }], B: [{ id: 'b1', name: 'z' }] }, config: { firstTo: 3, bestOf: 1 } }, events).state;
+    const goal2 = (side: 'a' | 'b', playerId: string): SportEvent => ({ type: 'goal', payload: { side, playerId } });
+    const boards = computeFoosballBoards([
+      { state: mk([goal2('a', 'a1'), goal2('a', 'a1'), goal2('b', 'b1'), goal2('a', 'a2')]), completed: true },
+      { state: mk([goal2('a', 'a1'), goal2('b', 'b1'), goal2('b', 'b1')]), completed: false },
+    ]);
+    const goals = boards.find((b) => b.key === 'goals')!;
+    expect(goals.rows.map((r) => [r.playerId, r.value, r.rank])).toEqual([['a1', '3', 1], ['b1', '3', 1], ['a2', '1', 3]]);
+    expect(boards.find((b) => b.key === 'best')!.rows[0]).toMatchObject({ playerId: 'a1', value: '2' });
+  });
+});
+
+describe('a state saved before the squads were known', () => {
+  it('syncContext puts the current team players in, so named goals are accepted', () => {
+    const ctxP: MatchContext = { matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], players: { A: [{ id: 'a1', name: 'Asha' }], B: [{ id: 'b1', name: 'Bela' }] }, config: { firstTo: 5, bestOf: 1 } };
+    const { state } = play(ctxP, [{ type: 'goal', payload: { side: 'a' } }]);
+    const old = { ...state, squads: undefined } as unknown as FoosballState;        // as saved by an older version
+    const goalA1: SportEvent = { type: 'goal', payload: { side: 'a', playerId: 'a1' } };
+    expect(engine.validate(old, goalA1).ok).toBe(false);
+    const fresh = engine.syncContext!(old, ctxP);
+    expect(engine.validate(fresh, goalA1).ok).toBe(true);
+    // a player added to the team after the match began can score too
+    const later = engine.syncContext!(state, { ...ctxP, players: { ...ctxP.players!, A: [...ctxP.players!.A!, { id: 'a9', name: 'New' }] } });
+    expect(engine.validate(later, { type: 'goal', payload: { side: 'a', playerId: 'a9' } }).ok).toBe(true);
+    expect(engine.apply(fresh, goalA1).games[0]!.scorers.at(-1)).toEqual({ side: 'a', playerId: 'a1', own: false });
+  });
+});
+
+describe('needing players before the first goal', () => {
+  const base: MatchContext = { matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], config: { firstTo: 3, bestOf: 1, requirePlayers: true } };
+  const g = (side: 'a' | 'b'): SportEvent => ({ type: 'goal', payload: { side } });
+  it('refuses the first goal while a team has nobody, and says which', () => {
+    const ctx = { ...base, players: { A: [{ id: 'a1', name: 'x' }], B: [] } };
+    const d = decide(engine, ctx, [], g('a'));
+    expect(!d.ok && d.error).toBe('Add at least one player to Beta before starting');
+  });
+  it('allows play once each team has a player, and does not re-check later', () => {
+    const ctx = { ...base, players: { A: [{ id: 'a1', name: 'x' }], B: [{ id: 'b1', name: 'y' }] } };
+    const { state } = play(ctx, [g('a')]);
+    expect(state.games[0]!.a).toBe(1);
+    const gone = engine.syncContext!(state, { ...ctx, players: { A: [{ id: 'a1', name: 'x' }], B: [] } });
+    expect(engine.validate(gone, g('b')).ok).toBe(true);
+  });
+  it('is the rule for every match unless it is switched off', () => {
+    const none = { ...base, config: { firstTo: 3, bestOf: 1 }, players: { A: [], B: [] } };
+    expect(decide(engine, none, [], g('a')).ok).toBe(false);
+    expect(decide(engine, { ...none, config: { firstTo: 3, bestOf: 1, requirePlayers: false } }, [], g('a')).ok).toBe(true);
+  });
+});
+
+describe('singles and doubles', () => {
+  const mk = (pps: number | undefined, a: number, b: number): MatchContext => ({
+    matchId: 'm', teams: [{ id: 'A', name: 'Alpha' }, { id: 'B', name: 'Beta' }], config: { firstTo: 3, bestOf: 1, ...(pps ? { playersPerSide: pps } : {}) },
+    players: { A: Array.from({ length: a }, (_, i) => ({ id: `a${i}`, name: `a${i}` })), B: Array.from({ length: b }, (_, i) => ({ id: `b${i}`, name: `b${i}` })) },
+  });
+  const g: SportEvent = { type: 'goal', payload: { side: 'a' } };
+  it('reads the setting from the match', () => {
+    expect(foosballRules({ playersPerSide: 2 }).playersPerSide).toBe(2);
+    expect(foosballRules({ playersPerSide: 1 }).playersPerSide).toBe(1);
+    expect(foosballRules({ playersPerSide: 5 }).playersPerSide).toBeUndefined();
+    expect(foosballRules({}).playersPerSide).toBeUndefined();
+    expect(engine.initialState(mk(2, 2, 2)).playersPerSide).toBe(2);
+    expect(engine.initialState(mk(undefined, 2, 2)).playersPerSide).toBeNull();
+  });
+  it('a doubles match needs two players in each team', () => {
+    const d = decide(engine, mk(2, 2, 1), [], g);
+    expect(!d.ok && d.error).toBe('Beta needs 2 players for a doubles match and has 1');
+    expect(decide(engine, mk(2, 0, 2), [], g).ok).toBe(false);
+    expect(decide(engine, mk(2, 2, 2), [], g).ok).toBe(true);
+    expect(decide(engine, mk(2, 3, 5), [], g).ok).toBe(true);
+  });
+  it('a singles match needs one', () => {
+    expect(decide(engine, mk(1, 1, 1), [], g).ok).toBe(true);
+    const d = decide(engine, mk(1, 1, 0), [], g);
+    expect(!d.ok && d.error).toBe('Add at least one player to Beta before starting');
+  });
+  it('a match made before the setting existed needs one, as before', () => {
+    expect(decide(engine, mk(undefined, 1, 1), [], g).ok).toBe(true);
+    expect(decide(engine, mk(undefined, 1, 0), [], g).ok).toBe(false);
   });
 });

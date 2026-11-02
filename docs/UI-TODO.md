@@ -123,7 +123,7 @@ Shared building blocks already in place: `styles/ratch-base.css` (tokens, chips,
 
 ## Engine and data
 
-- [x] Foosball engine, scorer, live view and TV mode: see docs/FOOSBALL.md. [ ] Doubles/lineups, foosball leaderboards, single matches outside a tournament.
+- [x] Foosball engine, scorer, live view and TV mode: see docs/FOOSBALL.md. [x] Goals credited to players, self goals, foosball stats on profiles, top scorers on the Leaders tab. [ ] Doubles pairs, single matches outside a tournament.
 - [ ] Super over and DLS for cricket.
 - [ ] Edit forms for teams, players, tournaments and matches in admin; fixture generation.
 - [ ] Redis for more than one realtime instance; audit log UI; rate limits (Phase 6).

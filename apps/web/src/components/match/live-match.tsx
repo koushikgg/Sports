@@ -13,6 +13,7 @@ import { displayHref, scoreHref } from '@/lib/match-href';
 import type { MatchCardData } from '@/lib/queries';
 import { useLiveMatch } from '@/lib/use-live-match';
 import type { FoosballState } from '@sports/sports-engine/src/foosball';
+import { ArrowUpRight } from '@/components/ratch/icons';
 import { FoosballCard } from '@/components/foosball/card';
 
 const TONE: Record<ChipData['kind'], string> = {
@@ -85,7 +86,7 @@ export function LiveMatch({ initial, card, canScore }: { initial: MatchSnapshot;
           )}
         </section>
         {cricket && <ScorerCard s={s} names={names} />}
-        {snapshot.sportKey === 'foosball' && (snapshot.state as FoosballState | null)?.kind === 'foosball' && <FoosballCard s={snapshot.state as FoosballState} />}
+        {snapshot.sportKey === 'foosball' && (snapshot.state as FoosballState | null)?.kind === 'foosball' && <FoosballCard s={snapshot.state as FoosballState} names={names} />}
       </>
     );
   }
@@ -219,7 +220,7 @@ export function MatchHeader({ card, sportName, canScore, scheduleVenues }: { car
         <div className="mp-actions">
           {scheduleVenues && card.status === 'scheduled' && card.seq === 0 && <EditMatchSchedule matchId={card.id} scheduledAt={card.scheduledAt} venue={card.venue} venues={scheduleVenues} overs={card.overs} />}
           {canScore && !finished && <Link href={scoreHref(card)} className="mx-btn mx-btn-lg" data-variant="amber">{card.seq === 0 ? 'START MATCH' : 'OPEN SCORER'}</Link>}
-          <Link href={displayHref(card)} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE ↗</Link>
+          <Link href={displayHref(card)} target="_blank" className="mx-btn mx-btn-lg" data-variant="gray">TV MODE <ArrowUpRight size={18} /></Link>
         </div>
       </div>
     </>

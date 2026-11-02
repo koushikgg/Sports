@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { BEST_OF_OPTIONS, FIRST_TO_OPTIONS, FIXTURE_TYPES, FOOSBALL_DEFAULTS, FORMATS, TIEBREAKS, VISIBILITIES, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FoosballRules, type FormatKey, type Visibility } from '@sports/shared';
+import { BEST_OF_OPTIONS, FIRST_TO_OPTIONS, PLAYERS_PER_SIDE_OPTIONS, FIXTURE_TYPES, FOOSBALL_DEFAULTS, FORMATS, TIEBREAKS, VISIBILITIES, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FoosballRules, type FormatKey, type Visibility } from '@sports/shared';
 import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
 import { addDays, planTournament } from '@sports/sports-engine/src/tournament-plan';
 import { sportColor, teamCode, teamTint } from '@/components/matches/model';
 import { Avatar } from '@/components/ratch/avatar';
+import { Check } from '@/components/ratch/icons';
 import { addTeam, addVenue, createMatchAction, publishTournament } from '@/app/tournaments/create/actions';
 import { toast } from '@/components/ratch/toast';
 import { scoreHref } from '@/lib/match-href';
@@ -306,7 +307,7 @@ export function Wizard(props: Props) {
   const review: [string, string, number][] = isT
     ? [
         ['NAME', t.name || '—', 0], ['SPORT', tSport?.name ?? '—', 0], ['DATES', `${fmtD(t.start)} – ${fmtD(t.end)}`, 0], ['VENUES', t.venueIds.map(venueName).join(', ') || 'None yet', 0], ['WHO CAN SEE IT', t.visibility === 'private' ? 'Private: admins and managers only' : 'Public: everyone', 0],
-        ['FORMAT', `${FORMATS[t.formatKey].label}${tIsCricket ? ` · ${t.overs} overs` : ''}${tIsFoos ? ` · ${t.fr.bestOf === 1 ? 'single game' : `best of ${t.fr.bestOf}`} to ${t.fr.firstTo}${t.fr.winBy === 2 ? ', win by 2' : ''}` : ''}${t.formatKey === 'lk' ? ` · top ${t.qualify} qualify` : ''}`, 1],
+        ['FORMAT', `${FORMATS[t.formatKey].label}${tIsCricket ? ` · ${t.overs} overs` : ''}${tIsFoos ? ` · ${(t.fr.playersPerSide ?? 2) === 1 ? 'singles' : 'doubles'} · ${t.fr.bestOf === 1 ? 'single game' : `best of ${t.fr.bestOf}`} to ${t.fr.firstTo}${t.fr.winBy === 2 ? ', win by 2' : ''}` : ''}${t.formatKey === 'lk' ? ` · top ${t.qualify} qualify` : ''}`, 1],
         ['POINTS', `Win ${t.points.win} · Tie ${t.points.tie} · No result ${t.points.noResult} · Tiebreak ${t.tiebreak}`, 1],
         ['TEAMS', t.teamIds.map((id) => teamById(id)?.name).filter(Boolean).join(', ') || '—', 2],
         ['SCHEDULE', `${plan.totalMatches} matches over ${plan.matchDays} days, ${t.perDay} per day from ${fmtT(t.firstTime)}${t.rest ? ', rest day between rounds' : ''}`, 3],
@@ -366,6 +367,10 @@ export function Wizard(props: Props) {
         )}
         {tIsFoos && (
           <>
+            <div className="cw-block"><Label>PLAYERS A SIDE</Label>
+              <Pills value={t.fr.playersPerSide ?? 2} onPick={(v) => setT({ ...t, fr: { ...t.fr, playersPerSide: v } })} options={PLAYERS_PER_SIDE_OPTIONS.map((v) => ({ v: v as 1 | 2, l: v === 1 ? 'SINGLES · 1 A SIDE' : 'DOUBLES · 2 A SIDE' }))} />
+              <p className="cw-muted">{(t.fr.playersPerSide ?? 2) === 2 ? 'Every team needs at least 2 players, and a team with more picks two for each match.' : 'Every team needs at least 1 player, and a team with more picks one for each match.'}</p>
+            </div>
             <div className="cw-block"><Label>MATCH</Label>
               <Pills value={t.fr.bestOf} onPick={(v) => setT({ ...t, fr: { ...t.fr, bestOf: v } })} options={BEST_OF_OPTIONS.map((v) => ({ v, l: v === 1 ? 'SINGLE GAME' : `BEST OF ${v}` }))} />
             </div>
@@ -413,7 +418,7 @@ export function Wizard(props: Props) {
               const n = rosterOf(x.id).length;
               return (
                 <button key={x.id} type="button" aria-pressed={on} data-on={on ? 'true' : undefined} onClick={() => setT({ ...t, teamIds: toggleIn(t.teamIds, x.id) })}>
-                  <TeamBadge name={x.name} short={x.shortName} logo={x.logo} /><span className="cw-tname">{x.name}<small>{n} {n === 1 ? 'player' : 'players'}</small></span><span className="cw-check">{on ? '✓' : ''}</span>
+                  <TeamBadge name={x.name} short={x.shortName} logo={x.logo} /><span className="cw-tname">{x.name}<small>{n} {n === 1 ? 'player' : 'players'}</small></span><span className="cw-check">{on ? <Check size={16} /> : null}</span>
                 </button>
               );
             })}
@@ -534,7 +539,7 @@ export function Wizard(props: Props) {
                     return (
                       <div key={p.id} className="cw-player" data-on={on ? 'true' : undefined}>
                         <button type="button" disabled={full} aria-pressed={on} onClick={() => togglePlayer(side, p.id)}>
-                          <span className="cw-check cw-check-sm">{on ? '✓' : ''}</span><span className="cw-tname">{p.name}</span>{p.role && <small>{p.role}</small>}
+                          <span className="cw-check cw-check-sm">{on ? <Check size={16} /> : null}</span><span className="cw-tname">{p.name}</span>{p.role && <small>{p.role}</small>}
                         </button>
                         {on && (
                           <>
@@ -609,7 +614,7 @@ export function Wizard(props: Props) {
             const reach = i <= visited, ok = stepsDone(i);
             return (
               <button key={l} type="button" disabled={!reach || !!done} aria-current={i === step ? 'step' : undefined} data-on={i === step ? 'true' : undefined} onClick={() => go(i)}>
-                <span className="cw-n" data-ok={ok && i !== step ? 'true' : undefined}>{ok && i !== step ? '✓' : i + 1}</span>
+                <span className="cw-n" data-ok={ok && i !== step ? 'true' : undefined}>{ok && i !== step ? <Check size={18} /> : i + 1}</span>
                 <span><b>{l}</b><small>{sub}</small></span>
               </button>
             );

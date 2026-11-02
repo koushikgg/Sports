@@ -1,8 +1,9 @@
-import { currentGame, gamesToWin, type FoosballState } from '@sports/sports-engine/src/foosball';
+import { currentGame, gamesToWin, playerGoals, type FoosballState } from '@sports/sports-engine/src/foosball';
 import './foosball.css';
 
 /** Game-by-game card for a foosball match page. */
-export function FoosballCard({ s }: { s: FoosballState }) {
+export function FoosballCard({ s, names }: { s: FoosballState; names: Record<string, string> }) {
+  const scorers = Object.entries(playerGoals(s)).sort((x, y) => y[1].goals - x[1].goals || y[1].own - x[1].own);
   const cur = currentGame(s);
   const rows = s.games.filter((g) => g.done || g.a + g.b > 0 || s.games.length === 1);
   return (
@@ -19,6 +20,16 @@ export function FoosballCard({ s }: { s: FoosballState }) {
           </div>
         ))}
       </div>
+      {scorers.length > 0 && (
+        <>
+          <span className="lbl" style={{ color: 'var(--text-secondary)' }}>SCORERS</span>
+          <div className="fb-scorers">
+            {scorers.map(([id, v]) => (
+              <span key={id}>{names[id] ?? '?'}{v.goals > 0 && <small>{v.goals} {v.goals === 1 ? 'GOAL' : 'GOALS'}</small>}{v.own > 0 && <small>{v.own} SELF {v.own === 1 ? 'GOAL' : 'GOALS'}</small>}</span>
+            ))}
+          </div>
+        </>
+      )}
     </section>
   );
 }

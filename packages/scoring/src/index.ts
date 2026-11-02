@@ -28,7 +28,8 @@ import { fitMatchesPerTeam } from '@sports/shared';
 import { gapMinutesFor, generateTableFixtures } from '@sports/sports-engine/src/table-fixtures';
 import { isMatchRef, slotKey, slotLabel } from '@sports/sports-engine/src/fixture-import';
 import { computeCricketBoards, type Board, type BoardRow, type LeaderMatch } from '@sports/sports-engine/src/leaders';
-import { foosballRules, totalGoals, type FoosballState } from '@sports/sports-engine/src/foosball';
+import { foosballRules, playerGoals, totalGoals, type FoosballState } from '@sports/sports-engine/src/foosball';
+import { computeFoosballBoards } from '@sports/sports-engine/src/foosball-leaders';
 import { computeStandings, type FinishedMatch, type Standing } from '@sports/sports-engine/src/standings';
 import { projectKnockout, projectLeagueKnockout, toInstant, type BracketRound } from '@sports/sports-engine/src/tournament-plan';
 import {
@@ -222,7 +223,7 @@ export async function submitScoreEvent(actor: Actor, input: ScoreEventInput): Pr
   const event = { type: input.type, payload: input.payload };
   const decision =
     event.type !== 'undo' && row.cachedState !== undefined
-      ? decideOnState(engine, row.cachedState, event)
+      ? decideOnState(engine, engine.syncContext ? engine.syncContext(row.cachedState, ctx) : row.cachedState, event)
       : decide(engine, ctx, await history(), event);
   if (!decision.ok) return { ok: false, code: 'invalid', message: decision.error };
 
@@ -450,6 +451,15 @@ export async function getTournamentLeaderboards(tournamentId: string): Promise<L
     .from(matchStates)
     .innerJoin(matches, eq(matches.id, matchStates.matchId))
     .where(eq(matches.tournamentId, tournamentId));
+  const foos = rows.filter((r) => (r.state as FoosballState | null)?.kind === 'foosball');
+  if (foos.length) {
+    const fm = foos.map((r) => ({ state: r.state as FoosballState, completed: r.status === 'completed' }));
+    const ids = new Set<string>();
+    for (const m of fm) { Object.values(m.state.squads ?? {}).forEach((sq) => sq.forEach((id) => ids.add(id))); Object.keys(playerGoals(m.state)).forEach((id) => ids.add(id)); }
+    const nameRows = ids.size ? await db.select({ id: players.id, name: players.name }).from(players).where(inArray(players.id, [...ids])) : [];
+    const nm = Object.fromEntries(nameRows.map((p) => [p.id, p.name]));
+    return computeFoosballBoards(fm).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, name: nm[r.playerId] ?? '?' })) }));
+  }
   const input: LeaderMatch[] = rows
     .filter((r) => (r.state as CricketState | null)?.kind === 'cricket')
     .map((r) => ({ state: r.state as CricketState, completed: r.status === 'completed', winnerTeamId: ((r.result as { winnerTeamId?: string | null } | null)?.winnerTeamId ?? null) }));
@@ -666,7 +676,7 @@ export async function advanceBracket(tournamentId: string): Promise<number> {
       .values({
         sportId: row.sportId, tournamentId, teamAId: a, teamBId: b, venue: f.venue, scheduledAt: toInstant(f.date, f.time, f.tz),
         config: row.sportKey === 'foosball'
-          ? { ...foosballRules(meta.rules) }
+          ? { ...foosballRules(meta.rules), requirePlayers: true }
           : { overs, ballsPerOver: 6, powerplayOvers: Math.min(6, overs), playersPerSide: 11, maxOversPerBowler: Math.ceil(overs / 5), freeHit: true, wideReball: true, superOver: true, dls: false },
         visibility: 'public', meta: { ...(f.round ? { round: f.round } : {}), ...(f.group ? { group: f.group } : {}), fixtureNo: f.no, source: meta.formatKey === 'lk' ? 'table' : 'fixture-import' },
       })
@@ -949,7 +959,7 @@ export async function getTournamentDetail(id: string, who: ViewerArg = false): P
     standings,
     groupStandings,
     matches: cards,
-    boards: row.sportKey === 'cricket' ? await getTournamentLeaderboards(id) : null,
+    boards: row.sportKey === 'cricket' || row.sportKey === 'foosball' ? await getTournamentLeaderboards(id) : null,
     bracket: rounds.length && !groupStandings.length ? { rounds, seeds, projected: summary.played === 0 || summary.formatKey !== 'ko' } : null,
     qualify,
     tiebreak,

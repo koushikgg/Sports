@@ -1,6 +1,6 @@
 /* Team page, from Team Management.dc.html (Claude Design). Tokens come from .ratch in ratch-base.css. */
 .tm { display: flex; flex-direction: column; gap: 24px; }
-.tm-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); text-decoration: none; }
+.tm-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: .06em; color: var(--text-tertiary); text-decoration: none; }
 .tm-back:hover { color: #fff; }
 .tm-hero { position: relative; z-index: 6; border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 24px; background: radial-gradient(60% 160% at 100% 0%, color-mix(in srgb, #ffdb4d 14%, transparent), transparent 60%), var(--surface-card); }
 .tm-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }

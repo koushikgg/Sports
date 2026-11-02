@@ -30,6 +30,11 @@ export interface SportEngine<State = unknown> {
   validate(state: State, event: SportEvent): Result;
   apply(state: State, event: SportEvent): State;
   summary(state: State, ctx: MatchContext): ScoreSummary;
+  /**
+   * Brings facts that live outside the event log (who is in each team) up to date on a cached state before the next
+   * event is checked, so a roster change or a state saved by an older version cannot lock players out.
+   */
+  syncContext?(state: State, ctx: MatchContext): State;
   /** Lets the server auto-complete a match and store a result. */
   outcome?(state: State): { complete: boolean; result?: Record<string, unknown> };
 }

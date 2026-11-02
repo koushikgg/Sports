@@ -1,5 +1,6 @@
 'use client';
 import { useSyncExternalStore } from 'react';
+import { Close } from './icons';
 import './toast.css';
 
 type Kind = 'error' | 'success';
@@ -51,7 +52,7 @@ export function Toaster() {
         <div key={t.id} className="rx-toast" data-kind={t.kind} role={t.kind === 'error' ? 'alert' : 'status'}>
           <i aria-hidden />
           <span>{t.text}</span>
-          <button type="button" aria-label="Dismiss" onClick={() => dismiss(t.id)}>×</button>
+          <button type="button" aria-label="Dismiss" onClick={() => dismiss(t.id)}><Close size={18} /></button>
         </div>
       ))}
     </div>

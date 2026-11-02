@@ -135,11 +135,15 @@ export const TIEBREAKS = ['NRR', 'DIFFERENCE', 'HEAD TO HEAD', 'WINS'] as const;
 export const FIRST_TO_OPTIONS = [5, 7, 10] as const;
 export const BEST_OF_OPTIONS = [1, 3, 5] as const;
 export const WIN_BY_OPTIONS = [1, 2] as const;
-export const FOOSBALL_DEFAULTS = { firstTo: 10, bestOf: 3, winBy: 1 } as const;
+/** Players a side: 1 is singles, 2 is doubles. */
+export const PLAYERS_PER_SIDE_OPTIONS = [1, 2] as const;
+export const FOOSBALL_DEFAULTS = { firstTo: 10, bestOf: 3, winBy: 1, playersPerSide: 2 } as const;
 export const foosballRulesSchema = z.object({
   firstTo: z.number().int().min(1).max(50),
   bestOf: z.union([z.literal(1), z.literal(3), z.literal(5)]),
   winBy: z.union([z.literal(1), z.literal(2)]),
+  /** Missing on matches made before this setting existed: those take one or two players, whatever the team has. */
+  playersPerSide: z.union([z.literal(1), z.literal(2)]).optional(),
 });
 export type FoosballRules = z.infer<typeof foosballRulesSchema>;
 

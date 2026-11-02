@@ -37,6 +37,7 @@ import {
   target as targetOf,
 } from '@sports/sports-engine/src/cricket-view';
 import { Chip } from '@/components/ratch/chip';
+import { ArrowLeft, Check, Close, Undo } from '@/components/ratch/icons';
 import { toast, Toaster } from '@/components/ratch/toast';
 import { useScorer } from '@/lib/use-live-match';
 import { ScorerCard } from './scorer-card';
@@ -382,7 +383,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
     <div className="ratch sc-root" data-theme="dark">
       <div className="sc-top">
         <div className="sc-brand">
-          <Link href={backHref} aria-label="Back to match" className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 16, marginRight: 4 }}>←</Link>
+          <Link href={backHref} aria-label="Back to match" className="sc-back"><ArrowLeft size={28} /></Link>
           <span className="sc-brand-dot" />
           <span className="sc-brand-name">Ratchet</span>
           <span className="sc-tag">SCORER</span>
@@ -510,7 +511,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                     <span className="lbl">THIS OVER · {overNo}{s.freeHit && <span className="sc-freehit"> · FREE HIT</span>}</span>
                     <span className="sc-row" style={{ gap: 10, flexWrap: 'nowrap' }}>
                       <span className="lbl">{currentOverRuns(inn)} RUNS</span>
-                      {s.lastAction?.type === 'ball' && <button type="button" className="sc-undo-mini" disabled={!canUndo || busy} onClick={undo}>↶ UNDO LAST BALL</button>}
+                      {s.lastAction?.type === 'ball' && <button type="button" className="sc-undo-mini" disabled={!canUndo || busy} onClick={undo}><Undo size={16} /> UNDO LAST BALL</button>}
                     </span>
                   </div>
                   <div className="sc-over-chips">
@@ -564,7 +565,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
               ))}
             </div>
             <button type="button" className="sc-undo" disabled={!canUndo || busy} onClick={undo} aria-label={`${undoTitle}. ${undoNote}`}>
-              <span className="sc-undo-ico" aria-hidden>↶</span>
+              <span className="sc-undo-ico" aria-hidden><Undo size={24} /></span>
               <span className="sc-undo-text"><b>{undoTitle}</b><small>{undoNote}</small></span>
               <kbd aria-hidden>U</kbd>
             </button>
@@ -592,9 +593,9 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
               <div className="lbl" style={{ color: shown === 'wicket' ? 'var(--red-text)' : 'var(--amber)' }}>{m.kicker}</div>
               <div className="sc-sheet-title">{m.title}</div>
             </div>
-            {m.closable && !forced && <button className="sc-x" aria-label="Close" onClick={() => setSheet(null)}>×</button>}
-            {shown === 'toss' && forced === 'toss' && <button className="sc-x" aria-label="Cancel and go back to the match" onClick={() => router.push(backHref)}>×</button>}
-            {shown === 'final' && <button className="sc-x" aria-label="Close" onClick={() => setAckFinal(true)}>×</button>}
+            {m.closable && !forced && <button className="sc-x" aria-label="Close" onClick={() => setSheet(null)}><Close size={22} /></button>}
+            {shown === 'toss' && forced === 'toss' && <button className="sc-x" aria-label="Cancel and go back to the match" onClick={() => router.push(backHref)}><Close size={22} /></button>}
+            {shown === 'final' && <button className="sc-x" aria-label="Close" onClick={() => setAckFinal(true)}><Close size={22} /></button>}
           </div>
 
           {shown === 'extras' && (
@@ -761,7 +762,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                   {slots.map((x, i) => (
                     <div key={x.key} style={{ display: 'contents' }}>
                       <button type="button" className="so-slot" data-active={on(open.step === x.key)} data-filled={on(!!x.id)} aria-pressed={open.step === x.key} onClick={() => setOpen((o) => ({ ...o, step: x.key }))}>
-                        <span className="so-n" aria-hidden>{x.id ? '✓' : x.n}</span>
+                        <span className="so-n" aria-hidden>{x.id ? <Check size={16} /> : x.n}</span>
                         <span className="so-slot-text">
                           <small>{x.label}</small>
                           <b>{x.id ? nameOfId(x.id) : 'Tap to choose'}</b>
@@ -788,7 +789,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
                           {p.isCaptain && <i>C</i>}
                           {p.isKeeper && <i>WK</i>}
                           {other && <i data-on="true">{other.label}</i>}
-                          {mine && <i data-on="true">✓</i>}
+                          {mine && <i data-on="true"><Check size={14} /></i>}
                         </span>
                       </button>
                     );
@@ -916,7 +917,7 @@ export function CricketScorer({ initial, venue, backHref: backTo }: { initial: M
       <aside className="sc-drawer" data-open={on(drawer)} aria-label="More actions" aria-hidden={!drawer}>
         <div className="sc-row" style={{ paddingBottom: 8, flexWrap: 'nowrap' }}>
           <h2>More actions</h2>
-          <button className="sc-x" aria-label="Close" onClick={() => setDrawer(false)} tabIndex={drawer ? 0 : -1}>×</button>
+          <button className="sc-x" aria-label="Close" onClick={() => setDrawer(false)} tabIndex={drawer ? 0 : -1}><Close size={22} /></button>
         </div>
         {([
           { l: 'Edit toss', d: 'Fix the toss before the first ball', fn: startEditToss, off: !canEditToss(s) || busy },

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BEST_OF_OPTIONS, FIRST_TO_OPTIONS, FIXTURE_TYPES, FOOSBALL_DEFAULTS, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FoosballRules, type FormatKey, type TournamentMeta } from '@sports/shared';
+import { BEST_OF_OPTIONS, FIRST_TO_OPTIONS, PLAYERS_PER_SIDE_OPTIONS, FIXTURE_TYPES, FOOSBALL_DEFAULTS, FORMATS, fitMatchesPerTeam, matchesPerTeamOptions, minTeamsFor, type FoosballRules, type FormatKey, type TournamentMeta } from '@sports/shared';
 import { addVenue } from '@/app/tournaments/create/actions';
 import { updateTournament } from '@/app/tournaments/[id]/actions';
 import '@/components/teams/team-manage.css';
@@ -20,7 +20,7 @@ export function EditTournament({ id, name, visibility, meta, cricket, foosball, 
   const [open, setOpen] = useState(false);
   const init = () => ({
     name, visibility, startDate: meta.schedule.startDate, endDate: meta.schedule.endDate, venueIds: meta.venues.map((v) => v.id).filter((vid) => allVenues.some((v) => v.id === vid)), formatKey: meta.formatKey as FormatKey,
-    perTeam: fitMatchesPerTeam(teamCount, meta.matchesPerTeam) ?? Math.max(1, teamCount - 1), overs: meta.overs ?? 20, rules: { ...FOOSBALL_DEFAULTS, ...(meta.rules ?? {}) } as FoosballRules, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
+    perTeam: fitMatchesPerTeam(teamCount, meta.matchesPerTeam) ?? Math.max(1, teamCount - 1), overs: meta.overs ?? 20, rules: { firstTo: FOOSBALL_DEFAULTS.firstTo, bestOf: FOOSBALL_DEFAULTS.bestOf, winBy: FOOSBALL_DEFAULTS.winBy, ...(meta.rules ?? {}) } as FoosballRules, points: { ...meta.points }, qualify: meta.qualify as 2 | 4, tiebreak: meta.tiebreak as Tie,
     perDay: meta.schedule.perDay, firstMatchTime: meta.schedule.firstMatchTime, restDay: meta.schedule.restDay,
   });
   const [f, setF] = useState(init);
@@ -38,7 +38,7 @@ export function EditTournament({ id, name, visibility, meta, cricket, foosball, 
   // a Table makes its fixtures again when the things they depend on change; a Custom list is cleared when the type changes
   const perTeamOptions = matchesPerTeamOptions(teamCount);
   const wantPerTeam = f.perTeam >= teamCount - 1 ? undefined : fitMatchesPerTeam(teamCount, f.perTeam);
-  const scheduleTouched = wantPerTeam !== fitMatchesPerTeam(teamCount, meta.matchesPerTeam) || f.startDate !== meta.schedule.startDate || f.perDay !== meta.schedule.perDay || f.firstMatchTime !== meta.schedule.firstMatchTime || f.restDay !== meta.schedule.restDay || f.qualify !== meta.qualify || (cricket && f.overs !== (meta.overs ?? 20)) || (foosball && JSON.stringify(f.rules) !== JSON.stringify({ ...FOOSBALL_DEFAULTS, ...(meta.rules ?? {}) })) || f.venueIds.join() !== meta.venues.map((v) => v.id).join();
+  const scheduleTouched = wantPerTeam !== fitMatchesPerTeam(teamCount, meta.matchesPerTeam) || f.startDate !== meta.schedule.startDate || f.perDay !== meta.schedule.perDay || f.firstMatchTime !== meta.schedule.firstMatchTime || f.restDay !== meta.schedule.restDay || f.qualify !== meta.qualify || (cricket && f.overs !== (meta.overs ?? 20)) || (foosball && JSON.stringify(f.rules) !== JSON.stringify({ firstTo: FOOSBALL_DEFAULTS.firstTo, bestOf: FOOSBALL_DEFAULTS.bestOf, winBy: FOOSBALL_DEFAULTS.winBy, ...(meta.rules ?? {}) })) || f.venueIds.join() !== meta.venues.map((v) => v.id).join();
   const remakes = !started && fixtureCount > 0 && table && (formatChanged || scheduleTouched);
   const types: FormatKey[] = FIXTURE_TYPES.includes(meta.formatKey as 'lk' | 'custom') ? [...FIXTURE_TYPES] : [meta.formatKey, ...FIXTURE_TYPES];
   const ties: Tie[] = cricket ? ['NRR', 'HEAD TO HEAD', 'WINS'] : ['DIFFERENCE', 'HEAD TO HEAD', 'WINS'];
@@ -143,6 +143,7 @@ export function EditTournament({ id, name, visibility, meta, cricket, foosball, 
             {foosball && (
               <div style={box}>
                 <span className="lbl">MATCH RULES{started ? '' : fixtureCount > 0 ? ' · UPDATES THE SCHEDULED MATCHES' : ''}</span>
+                <div style={row}>{PLAYERS_PER_SIDE_OPTIONS.map((v) => <button key={v} type="button" aria-pressed={f.rules.playersPerSide === v} disabled={started} className="tm-btn" style={pill(f.rules.playersPerSide === v, started)} onClick={() => set('rules', { ...f.rules, playersPerSide: v })}>{v === 1 ? 'SINGLES' : 'DOUBLES'}</button>)}</div>
                 <div style={row}>{BEST_OF_OPTIONS.map((v) => <button key={v} type="button" aria-pressed={f.rules.bestOf === v} disabled={started} className="tm-btn" style={pill(f.rules.bestOf === v, started)} onClick={() => set('rules', { ...f.rules, bestOf: v })}>{v === 1 ? 'SINGLE GAME' : `BEST OF ${v}`}</button>)}</div>
                 <div style={row}>{FIRST_TO_OPTIONS.map((v) => <button key={v} type="button" aria-pressed={f.rules.firstTo === v} disabled={started} className="tm-btn" style={pill(f.rules.firstTo === v, started)} onClick={() => set('rules', { ...f.rules, firstTo: v })}>{v} GOALS</button>)}</div>
                 <div style={row}>{([[1, 'FIRST TO THE TARGET'], [2, 'MUST WIN BY 2']] as const).map(([v, l]) => <button key={v} type="button" aria-pressed={f.rules.winBy === v} disabled={started} className="tm-btn" style={pill(f.rules.winBy === v, started)} onClick={() => set('rules', { ...f.rules, winBy: v })}>{l}</button>)}</div>

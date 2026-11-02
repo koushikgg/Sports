@@ -1,4 +1,5 @@
 import { alias, asc, desc, eq, getDb, inArray, matchLineups, matchStates, matches, players, sports, sql, teamManagers, teamMembers, teams, tournaments, users } from '@sports/db';
+import { playerGoals, type FoosballState } from '@sports/sports-engine/src/foosball';
 import { avatarSrc } from '@/lib/avatar';
 
 export interface PlayerMatch {
@@ -19,6 +20,8 @@ export interface PlayerMatch {
   /** Bowling figures in legal balls. null when they did not bowl. */
   bowl: { balls: number; runs: number; wkts: number; maidens: number } | null;
   catches: number;
+  /** Foosball: goals they scored, own goals they put in, and the games each side won. null for other sports. */
+  foos: { goals: number; own: number; games: number; oppGames: number } | null;
 }
 
 export interface PlayerProfile {
@@ -31,6 +34,8 @@ export interface PlayerProfile {
   avatar: string | null;
   teams: { id: string; name: string; isCaptain: boolean; isManager: boolean }[];
   matches: PlayerMatch[];
+  /** Every sport that is switched on, so each has a tab even before the first match. */
+  sports: { key: string; name: string }[];
 }
 
 const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
@@ -71,6 +76,7 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
         .select({
           id: matches.id, sportKey: sports.key, tournamentId: matches.tournamentId, sport: sports.name, teamAId: matches.teamAId, teamBId: matches.teamBId, a: A.name, b: B.name,
           at: sql<string>`coalesce(${matches.scheduledAt}, ${matches.createdAt})`, result: matches.result, tournament: tournaments.name,
+          fs: sql<FoosballState | null>`case when ${sports.key} = 'foosball' then ${matchStates.state} else null end`,
           inn: sql<InningsRow[]>`(select coalesce(jsonb_agg(jsonb_build_object('team', i->>'battingTeamId', 'runs', i->'runs', 'wkts', i->'wickets', 'mine', ${mine}, 'bowl', i->'bowlers'->${playerId}::text, 'catches', (select count(*) from jsonb_each(i->'batters') b where b.value->'out'->>'kind' = 'caught' and b.value->'out'->>'fielderId' = ${playerId}::text))), '[]'::jsonb) from jsonb_array_elements(${matchStates.state}->'innings') i)`,
         })
         .from(matches)
@@ -100,20 +106,26 @@ export async function getPlayerProfile(playerId: string): Promise<PlayerProfile 
     const batted = inn.map((i) => i.mine).filter((m): m is NonNullable<InningsRow['mine']> => !!m);
     const bowled = inn.map((i) => i.bowl).filter((b): b is NonNullable<InningsRow['bowl']> => !!b && b.legalBalls > 0);
     const winner = (r.result as { winnerTeamId?: string } | null)?.winnerTeamId;
+    const fs = r.fs?.kind === 'foosball' ? r.fs : null;
+    const mine_ = myTeam === r.teamAId ? 'a' : 'b';
+    const theirs_ = mine_ === 'a' ? 'b' : 'a';
+    const lastGame = fs?.games.at(-1);
+    const foos = fs ? { goals: playerGoals(fs)[playerId]?.goals ?? 0, own: playerGoals(fs)[playerId]?.own ?? 0, games: fs.gamesWon[mine_], oppGames: fs.gamesWon[theirs_] } : null;
     out.push({
       id: r.id, sportKey: r.sportKey, tournamentId: r.tournamentId, sport: r.sport,
       result: winner ? (winner === myTeam ? 'W' : 'L') : 'T',
       date: day.format(new Date(r.at)).toUpperCase(),
       team: myTeam === r.teamAId ? r.a : r.b, opp: myTeam === r.teamAId ? r.b : r.a,
       comp: `${r.sport} · ${r.tournament ?? 'Friendly'}`.toUpperCase(),
-      score: side(myTeam) && side(opponent) ? `${side(myTeam)} – ${side(opponent)}` : '',
+      score: fs ? (fs.bestOf > 1 ? `${fs.gamesWon[mine_]} – ${fs.gamesWon[theirs_]}` : lastGame ? `${lastGame[mine_]} – ${lastGame[theirs_]}` : '') : side(myTeam) && side(opponent) ? `${side(myTeam)} – ${side(opponent)}` : '',
       bat: batted.length ? { runs: batted.reduce((t, m) => t + m.runs, 0), balls: batted.reduce((t, m) => t + m.balls, 0), notOut: batted.every((m) => !m.out) } : null,
       bowl: bowled.length ? { balls: bowled.reduce((t, b) => t + b.legalBalls, 0), runs: bowled.reduce((t, b) => t + b.runs, 0), wkts: bowled.reduce((t, b) => t + b.wickets, 0), maidens: bowled.reduce((t, b) => t + b.maidens, 0) } : null,
       catches: inn.reduce((t, i) => t + Number(i.catches ?? 0), 0),
+      foos,
     });
   }
 
-  return { id: p.id, name: p.name, role: p.role, email: p.email ?? p.playerEmail, employeeId: p.employeeId, hasAccount: !!p.userId, avatar: p.has ? avatarSrc(p.userId, p.at ?? new Date(0)) : null, teams: teamList, matches: out };
+  return { id: p.id, name: p.name, role: p.role, email: p.email ?? p.playerEmail, employeeId: p.employeeId, hasAccount: !!p.userId, avatar: p.has ? avatarSrc(p.userId, p.at ?? new Date(0)) : null, teams: teamList, matches: out, sports: await db.select({ key: sports.key, name: sports.name }).from(sports).where(eq(sports.enabled, true)).orderBy(asc(sports.name)) };
 }
 
 export interface Kpi { k: string; v: string | number; accent?: boolean }
@@ -125,6 +137,17 @@ export function summarize(sportKey: string, list: PlayerMatch[]): { groups: { ti
   const n = list.length;
   const won = list.filter((m) => m.result === 'W').length;
   const rate = n ? `${Math.round((won / n) * 100)}%` : '—';
+  if (sportKey === 'foosball' && n > 0) {
+    const f = list.map((m) => m.foos).filter((x): x is NonNullable<PlayerMatch['foos']> => !!x);
+    const goals = f.reduce((t, x) => t + x.goals, 0);
+    const best = f.reduce((h, x) => Math.max(h, x.goals), 0);
+    return {
+      groups: [
+        { title: null, kpis: [{ k: 'MATCHES', v: n }, { k: 'WON', v: won }, { k: 'WIN RATE', v: rate, accent: true }, { k: 'GAMES WON', v: f.reduce((t, x) => t + x.games, 0) }] },
+        { title: 'SCORING', kpis: [{ k: 'GOALS', v: goals, accent: true }, { k: 'GOALS A MATCH', v: (goals / n).toFixed(1) }, { k: 'MOST IN A MATCH', v: best }, { k: 'OWN GOALS', v: f.reduce((t, x) => t + x.own, 0) }] },
+      ],
+    };
+  }
   if (sportKey !== 'cricket' || n === 0) return { groups: [{ title: null, kpis: [{ k: 'MATCHES', v: n || '—' }, { k: 'WON', v: n ? won : '—' }, { k: 'WIN RATE', v: rate, accent: true }] }] };
 
   const bats = list.map((m) => m.bat).filter((b): b is NonNullable<PlayerMatch['bat']> => !!b);
