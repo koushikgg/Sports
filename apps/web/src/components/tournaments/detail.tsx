@@ -44,10 +44,10 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
   // Imported fixtures still waiting on a result sit alongside real matches.
   type Item = { at: string; m?: (typeof t.matches)[number]; p?: (typeof t.pending)[number] };
   const noOf = (it: Item) => it.p?.no ?? it.m?.fixtureNo ?? Number.MAX_SAFE_INTEGER;
+  const roundOf = (it: Item) => it.m?.round ?? it.p?.round ?? null;
   const venueNames = (t.meta?.venues ?? []).map((v) => v.name);
   const stageLike = (r: string | null | undefined): r is string => !!r?.trim();
   const dayText = (at: string) => (at === '9999' ? 'DATE TO BE CONFIRMED' : new Date(at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase());
-  const roundOf = (it: Item) => it.m?.round ?? it.p?.round ?? null;
   const days = useMemo(() => {
     const items: Item[] = [
       ...t.matches.map((m) => ({ at: m.scheduledAt ?? '9999', m })),
@@ -60,6 +60,7 @@ export function TournamentPanel({ t, isAdmin, candidates, fixturePrompt, venues,
       map.set(key, [...(map.get(key) ?? []), it]);
     }
     return [...map]; // groups come out in the order they are first played
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.matches, t.pending]);
 
   return (

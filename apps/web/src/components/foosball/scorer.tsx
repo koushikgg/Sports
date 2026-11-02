@@ -208,7 +208,7 @@ export function FoosballScorer({ initial, venue, backHref }: { initial: MatchSna
                         );
                       })}
                     </div>
-                  ) : own ? <span className="fb-nopeople">No players in this team, so a self goal can't be credited to anyone.</span> : null}
+                  ) : own ? <span className="fb-nopeople">No players in this team, so a self goal cannot be credited to anyone.</span> : null}
                   {!own && (
                     <button type="button" className="fb-tap" disabled={!canScore} onClick={() => goal(k)} aria-label={`Goal for ${team.name}`}>
                       {s.result ? 'MATCH OVER' : people.length ? '+ GOAL · NO SCORER' : '+ GOAL'}<kbd aria-hidden>{k.toUpperCase()}</kbd>
