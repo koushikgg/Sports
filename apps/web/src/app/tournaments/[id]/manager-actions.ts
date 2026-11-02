@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { and, eq, getDb, tournamentManagers, tournaments, users } from '@sports/db';
 import { audit, requireRole } from '@/lib/guard';
+import { forgetShellUser } from '@/lib/shell-user';
 
 const ids = z.object({ tournamentId: z.string().uuid(), userId: z.string().uuid() });
 
@@ -19,6 +20,7 @@ export async function addTournamentManager(raw: unknown): Promise<{ error?: stri
   if (!t) return { error: 'Tournament not found.' };
   if (!u) return { error: 'That person no longer has an account.' };
   await db.insert(tournamentManagers).values({ tournamentId: t.id, userId: u.id }).onConflictDoNothing();
+  forgetShellUser(u.id);
   await audit(admin.id, 'add_tournament_manager', 'tournament', t.id, { userId: u.id });
   revalidatePath(`/tournaments/${t.id}`);
   return { manager: u };
@@ -30,6 +32,7 @@ export async function removeTournamentManager(raw: unknown): Promise<{ error?: s
   const p = ids.safeParse(raw);
   if (!p.success) return { error: 'Unknown manager.' };
   await getDb().delete(tournamentManagers).where(and(eq(tournamentManagers.tournamentId, p.data.tournamentId), eq(tournamentManagers.userId, p.data.userId)));
+  forgetShellUser(p.data.userId);
   await audit(admin.id, 'remove_tournament_manager', 'tournament', p.data.tournamentId, { userId: p.data.userId });
   revalidatePath(`/tournaments/${p.data.tournamentId}`);
   return {};

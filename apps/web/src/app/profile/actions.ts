@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { eq, getDb, players, users } from '@sports/db';
 import { auth } from '@/auth';
+import { forgetShellUser } from '@/lib/shell-user';
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Enter your name.').max(60, 'Keep your name under 60 characters.'),
@@ -29,6 +30,7 @@ export async function saveProfile(formData: FormData): Promise<{ error?: string 
     const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, session.user.id)).limit(1);
     await db.insert(players).values({ name, email: me?.email ?? null, userId: session.user.id, role: cricketRole }).onConflictDoNothing();
   }
+  forgetShellUser(session.user.id);
   revalidatePath('/', 'layout');
   return {};
 }

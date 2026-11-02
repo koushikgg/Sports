@@ -6,6 +6,7 @@ import { count, eq, getDb, users } from '@sports/db';
 import { ROLES } from '@sports/shared';
 import { unusablePasswordHash } from '@/lib/passwords';
 import { audit, requireRole } from '@/lib/guard';
+import { forgetShellUser } from '@/lib/shell-user';
 
 const done = (kind: 'notice' | 'error', text: string): never => {
   revalidatePath('/admin/users');
@@ -50,6 +51,7 @@ export async function setUserRole(formData: FormData) {
   if (target.role === 'admin' && role.data !== 'admin' && (await adminCount()) <= 1) return done('error', 'There must be at least one admin.');
 
   await db.update(users).set({ role: role.data }).where(eq(users.id, id));
+  forgetShellUser(id);
   await audit(admin.id, 'set_role', 'user', id, { role: role.data });
   return done('notice', `${target.email} is now ${role.data}.`);
 }
@@ -66,6 +68,7 @@ export async function removeUser(formData: FormData) {
 
   try {
     await db.delete(users).where(eq(users.id, id));
+    forgetShellUser(id);
   } catch {
     // They have scored matches or been assigned to them, so their history still points at them.
     return done('error', `${target.email} has scoring history and cannot be removed. Change their role instead.`);
